@@ -6,12 +6,14 @@
 # nuitka-project: --include-package=daw2logic
 # nuitka-project: --include-package=logicx
 # nuitka-project: --include-package-data=logicx
+# nuitka-project: --include-module=zlib
 # nuitka-project: --nofollow-import-to=pytest
 # nuitka-project: --nofollow-import-to=tests
 
 from __future__ import annotations
 
 import sys
+import zlib  # noqa: F401 — Nuitka anti-bloat omits zlib unless forced; zipfile needs it
 
 from daw2logic.wasm_api import convert_dawproject_bytes, pack_conversion_result
 
