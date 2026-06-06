@@ -10,15 +10,18 @@ The converter is a portable Python CLI (Linux and macOS). It uses [LogicProForma
 - Git (for submodules)
 - Logic Pro on macOS — optional, for manual playback checks and reverse-engineering fixtures
 
-## Quick start
+## WASM
 
-Use pre-built executables for **Linux x86_64** or **macOS arm64**.
+Convert DAWproject to Logic Pro `.logicx` in your browser with the [Experimental WASM Browser App](https://audiohacking.github.io/daw2logic/)
+
+## Local
+
+Use pre-built executables for **Linux x86_64** or **macOS arm64**
 
 ### **macOS (Apple Silicon)**
 
 ```bash
-curl -fsSL -o daw2logic \
-  https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-macos-arm64
+curl -fsSL -o daw2logic https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-macos-arm64
 chmod +x daw2logic
 xattr -dr com.apple.quarantine daw2logic 2>/dev/null || true
 ./daw2logic song.dawproject -o song.logicx
@@ -27,8 +30,7 @@ xattr -dr com.apple.quarantine daw2logic 2>/dev/null || true
 ### **Linux**
 
 ```bash
-curl -fsSL -o daw2logic \
-  https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-linux-x86_64
+curl -fsSL -o daw2logic https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-linux-x86_64
 chmod +x daw2logic
 ./daw2logic song.dawproject -o song.logicx
 ```
