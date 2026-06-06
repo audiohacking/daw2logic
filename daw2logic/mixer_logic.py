@@ -1,7 +1,8 @@
-"""Apply mixer state to Logic ProjectData OCuA channel strips (when offsets are known)."""
+"""Apply mixer state to Logic ProjectData OCuA channel strips."""
 
 from __future__ import annotations
 
+import math
 import struct
 from pathlib import Path
 
@@ -11,24 +12,42 @@ from .ir import Project, Track
 from .logicx_channels import channel_for_track
 from .track_order import _counting_ordinals, logic_aud_ordinal, logic_inst_ordinal
 
-# Unverified until differential RE against Logic-made fixtures (see tools/ocua_mixer_re.py).
-OCUA_VOLUME_LINEAR_OFF: int | None = None
+# Logic-validated 2026-06 (re_vol.logicx: -6 dB on an audio strip -> float 1.559 @0x98).
+# Encoding: float32 LE stored = dB + OCUA_VOLUME_DB_OFFSET  (0 dB -> ~7.559, -6 dB -> 1.559).
+OCUA_AUDIO_VOLUME_DB_OFF = 0x98
+OCUA_VOLUME_DB_OFFSET = 7.5590658
+OCUA_AUDIO_CFG = b"\xab\xf7"
+OCUA_INST_CFG = b"\x29\xf5"
+
+# @0x4e 00->03 on save across all strips — touch/session flag, NOT fader level.
+OCUA_TOUCH_FLAG_OFF = 0x4e
+
 OCUA_PAN_OFF: int | None = None
 OCUA_MUTE_OFF: int | None = None
 
 
-def _linear_to_db(linear: float) -> float:
+def linear_to_logic_volume_db(linear: float) -> float:
+    """DAWproject linear gain -> Logic OCuA float @0x98 (audio strips)."""
     if linear <= 0:
-        return -100.0
-    import math
-    return 20.0 * math.log10(linear)
+        db = -100.0
+    else:
+        db = 20.0 * math.log10(linear)
+    return db + OCUA_VOLUME_DB_OFFSET
 
 
-def _patch_float(raw: bytearray, offset: int | None, value: float) -> bool:
-    if offset is None or offset + 4 > len(raw):
-        return False
+def logic_volume_db_to_linear(stored: float) -> float:
+    db = stored - OCUA_VOLUME_DB_OFFSET
+    if db <= -100.0:
+        return 0.0
+    return 10.0 ** (db / 20.0)
+
+
+def _is_audio_strip(raw: bytes) -> bool:
+    return len(raw) > 0x72 and raw[0x70:0x72] == OCUA_AUDIO_CFG
+
+
+def _patch_float(raw: bytearray, offset: int, value: float) -> None:
     struct.pack_into("<f", raw, offset, float(value))
-    return True
 
 
 def _patch_mute(raw: bytearray, offset: int | None, muted: bool) -> bool:
@@ -45,11 +64,12 @@ def patch_ocua_mixer(raw: bytes, *, volume_linear: float | None = None,
         return None
     b = bytearray(raw)
     changed = False
-    if volume_linear is not None and OCUA_VOLUME_LINEAR_OFF is not None:
-        changed |= _patch_float(b, OCUA_VOLUME_LINEAR_OFF, volume_linear)
+    if volume_linear is not None and _is_audio_strip(raw):
+        _patch_float(b, OCUA_AUDIO_VOLUME_DB_OFF, linear_to_logic_volume_db(volume_linear))
+        changed = True
     if pan_normalized is not None and OCUA_PAN_OFF is not None:
-        # DAWproject pan is 0=left, 0.5=center, 1=right; Logic encoding TBD.
-        changed |= _patch_float(b, OCUA_PAN_OFF, pan_normalized)
+        _patch_float(b, OCUA_PAN_OFF, pan_normalized)
+        changed = True
     if mute is not None and OCUA_MUTE_OFF is not None:
         changed |= _patch_mute(b, OCUA_MUTE_OFF, mute)
     return bytes(b) if changed else None
@@ -63,10 +83,7 @@ def _mixer_needs_patch(track: Track) -> bool:
 
 
 def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
-    """Write mixer fields into ProjectData when OCuA offsets are configured."""
-    if OCUA_VOLUME_LINEAR_OFF is None and OCUA_PAN_OFF is None and OCUA_MUTE_OFF is None:
-        return
-
+    """Write mixer fields into ProjectData OCuA strips (audio volume native; inst TBD)."""
     pd_path = logicx_dir / "Alternatives" / "000" / "ProjectData"
     pd = ProjectData.parse(pd_path.read_bytes())
     ordinals = _counting_ordinals(project)
@@ -90,6 +107,11 @@ def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
         if oc is None:
             report.warnings.append(f"track '{track.name}': no OCuA strip for channel 0x{ch:x}")
             continue
+        if has_midi and track.volume is not None and oc.raw[0x70:0x72] == OCUA_INST_CFG:
+            report.warnings.append(
+                f"track '{track.name}': instrument strip volume not RE'd yet (sidecar only)"
+            )
+            continue
         new_raw = patch_ocua_mixer(
             oc.raw,
             volume_linear=track.volume,
@@ -98,11 +120,12 @@ def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
         )
         if new_raw is None:
             report.warnings.append(
-                f"track '{track.name}': mixer patch skipped (unknown OCuA field encoding)"
+                f"track '{track.name}': mixer patch skipped (unsupported strip type)"
             )
             continue
         oc.raw = new_raw
         patched += 1
+        report.mixer_patched_tracks.add(track.name)
 
     if patched:
         pd_path.write_bytes(pd.serialize())

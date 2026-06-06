@@ -79,7 +79,8 @@ def test_convert_extended_tempo_map_and_markers(
 
 def test_convert_reports_mixer_sidecar(bitwig_simple_dawproject, logicx_output):
     report = convert_file(bitwig_simple_dawproject, logicx_output)
-    assert any("mixer values exported to sidecar" in w for w in report.warnings)
+    assert any("track 'Bass': mixer values exported to sidecar" in w for w in report.warnings)
+    assert "Drumloop" in report.mixer_patched_tracks
     manifest = json.loads(
         (logicx_output / "Media/daw2logic Import/manifest.json").read_text()
     )

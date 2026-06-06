@@ -30,6 +30,7 @@ class ConversionReport:
     plugins_copied: int = 0
     tempo: float = 120.0
     title: str | None = None
+    mixer_patched_tracks: set[str] = field(default_factory=set)
 
 
 def _resolve_audio(path: str, project: Project) -> Path:

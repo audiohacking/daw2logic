@@ -28,8 +28,12 @@ echo "  3. Quit Logic Pro, then press Enter here"
 open -a "Logic Pro" "$after"
 read -r -p "Press Enter after saving in Logic... " _
 
-echo "Diffing OCuA strips (template Inst 1 channel 0x580000):"
+echo "Diffing OCuA strips for Drumloop (channel 0x640000):"
 cd "$root"
-PYTHONPATH=third_party/LogicProFormatWriter python3 tools/ocua_mixer_re.py "$baseline" "$after" --channel 0x580000
+PYTHONPATH=third_party/LogicProFormatWriter python3 tools/ocua_mixer_re.py "$baseline" "$after" --channel 0x640000
 echo
-echo "Record any byte offsets in daw2logic/mixer_logic.py (OCUA_VOLUME_LINEAR_OFF, etc.)"
+echo "Also diff template Audio 1 (0x5c0000) if you edited the wrong row:"
+PYTHONPATH=third_party/LogicProFormatWriter python3 tools/ocua_mixer_re.py "$baseline" "$after" --channel 0x5c0000
+echo
+echo "Volume encoding: audio strips @0x98 float = dB + 7.559 (see daw2logic/mixer_logic.py)"
+echo "@0x4e 00->03 is a save/touch flag on all strips, not fader level."

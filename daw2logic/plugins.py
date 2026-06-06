@@ -41,7 +41,7 @@ def export_sidecars(logicx_dir: Path, project: Project, report) -> None:
         "tracks": [],
         "notes": [
             "AU presets are copied for manual loading in Logic Pro (Channel Strip settings).",
-            "Mixer and automation JSON are reference data; Logic ProjectData mixer is not patched yet.",
+            "Mixer JSON is a fallback reference; audio track volume is written to ProjectData when supported.",
         ],
     }
 
@@ -51,7 +51,7 @@ def export_sidecars(logicx_dir: Path, project: Project, report) -> None:
         mixer = _track_mixer(track)
         if mixer:
             entry["mixer"] = mixer
-            if _mixer_is_non_default(track):
+            if _mixer_is_non_default(track) and track.name not in report.mixer_patched_tracks:
                 report.warnings.append(
                     f"track '{track.name}': mixer values exported to sidecar only "
                     "(Logic channel strips not patched)"
