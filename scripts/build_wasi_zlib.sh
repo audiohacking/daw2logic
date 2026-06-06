@@ -12,8 +12,30 @@ ZLIB_VERSION="${ZLIB_VERSION:-1.3.1}"
 source "$VENV/bin/activate"
 
 NUITKA="$(python -c 'import nuitka, pathlib; print(pathlib.Path(nuitka.__file__).parent)')"
-CLANG="$NUITKA/wasi-sdk/21/sdk-Darwin/bin/clang"
-SYSROOT="$NUITKA/wasi-sdk/21/sdk-Darwin/share/wasi-sysroot"
+WASI_SDK="$(python - <<'PY'
+import contextlib
+import os
+import platform
+import sys
+
+import nuitka
+
+sdk = os.path.join(
+    os.path.dirname(nuitka.__file__),
+    f"wasi-sdk/21/sdk-{platform.system()}",
+)
+clang = os.path.join(sdk, "bin/clang")
+if not os.path.isfile(clang):
+    from nuitka.utils.wasi_sdk import download_sdk
+
+    with contextlib.redirect_stdout(sys.stderr):
+        download_sdk()
+
+print(sdk)
+PY
+)"
+CLANG="$WASI_SDK/bin/clang"
+SYSROOT="$WASI_SDK/share/wasi-sysroot"
 
 if [[ ! -x "$CLANG" ]]; then
   echo "wasi clang not found at $CLANG" >&2
