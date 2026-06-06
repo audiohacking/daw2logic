@@ -16,11 +16,14 @@ from daw2logic.mixer_logic import (
     OCUA_PAN_OFF,
     OCUA_VOL_GATE_OFF,
     OCUA_VOLUME_DB_OFFSET,
+    OCUA_VOLUME_FLOAT_TAIL,
     IVNE_VOLUME_ACTIVE_OFF,
     IVNE_VOLUME_ACTIVE_VAL,
     IVNE_VOLUME_OFF,
     KART_VOL_DISPLAY_OFF,
     apply_mixer,
+    encode_ocua_volume,
+    encode_ocua_volume_bytes,
     linear_to_ivne_volume_float,
     linear_to_kart_volume_display,
     linear_to_logic_volume_db,
@@ -47,10 +50,30 @@ def test_patch_ocua_mixer_inactive_strip():
 
 
 def test_volume_db_encoding_from_logic_capture():
-    """Logic -6 dB capture stored float 1.559 @0x98."""
-    stored = linear_to_logic_volume_db(10 ** (-6 / 20))
+    """Logic -6 dB capture from volume_sweep_baseline.logicx."""
+    gate, bs = encode_ocua_volume(10 ** (-6 / 20))
+    assert gate == 0x3F
+    assert bs == bytes.fromhex("3c8fc73f")
+    stored = struct.unpack("<f", bs)[0]
     assert stored == pytest.approx(1.5590658, rel=1e-4)
     assert logic_volume_db_to_linear(stored) == pytest.approx(0.501187, rel=1e-3)
+
+
+def test_encode_ocua_volume_gate_matches_float_tail():
+    for linear in (0.659140, 0.177125, 10 ** (-6 / 20), 1.0):
+        gate, bs = encode_ocua_volume(linear)
+        assert bs[3] == gate
+
+
+def test_encode_ocua_volume_bass_and_drum():
+    gate, bs = encode_ocua_volume(0.659140)  # ~-3.6 dB
+    assert gate == 0x49
+    assert bs.hex() == "6db4bc49"
+    assert bs[3] == gate
+    gate, bs = encode_ocua_volume(0.177125)  # ~-15 dB
+    assert gate == 0x25
+    assert bs.hex() == "3c8fc725"
+    assert bs[3] == gate
 
 
 def test_convert_patches_drumloop_volume(bitwig_simple_dawproject, logicx_output):
@@ -58,9 +81,10 @@ def test_convert_patches_drumloop_volume(bitwig_simple_dawproject, logicx_output
     pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
     ch = audio_channels(pd)[2]  # synthesized Drumloop (ordinal 2)
     oc = _ocua_for_channel(pd, ch)
-    stored = struct.unpack_from("<f", oc.raw, OCUA_AUDIO_VOLUME_DB_OFF)[0]
-    expected = linear_to_logic_volume_db(0.177125)
-    assert stored == pytest.approx(expected, rel=1e-4)
+    raw = oc.raw
+    assert raw[OCUA_VOL_GATE_OFF] == 0x25
+    assert raw[OCUA_VOLUME_FLOAT_TAIL] == 0x25
+    assert raw[OCUA_AUDIO_VOLUME_DB_OFF:OCUA_AUDIO_VOLUME_DB_OFF + 4].hex() == "3c8fc725"
     assert "Drumloop" in report.mixer_patched_tracks
 
 
@@ -69,10 +93,10 @@ def test_convert_patches_bass_volume(bitwig_simple_dawproject, logicx_output):
     pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
     ch = instrument_channels(pd)[2]  # synthesized Bass (ordinal 2)
     oc = _ocua_for_channel(pd, ch)
-    stored = struct.unpack_from("<f", oc.raw, OCUA_AUDIO_VOLUME_DB_OFF)[0]
-    expected = linear_to_logic_volume_db(0.659140)
-    assert stored == pytest.approx(expected, rel=1e-4)
-    assert oc.raw[OCUA_VOL_GATE_OFF] == 0x3F
+    raw = oc.raw
+    assert raw[OCUA_VOL_GATE_OFF] == 0x49
+    assert raw[OCUA_VOLUME_FLOAT_TAIL] == 0x49
+    assert raw[OCUA_AUDIO_VOLUME_DB_OFF:OCUA_AUDIO_VOLUME_DB_OFF + 4].hex() == "6db4bc49"
     assert "Bass" in report.mixer_patched_tracks
     assert "Drumloop" in report.mixer_patched_tracks
     assert not any("mixer values exported to sidecar" in w and "Bass" in w for w in report.warnings)
@@ -125,7 +149,6 @@ def test_convert_patches_ivne_display_volume(bitwig_simple_dawproject, logicx_ou
         r for r in pd.records
         if r.tag == b"ivnE" and int.from_bytes(r.raw[8:12], "little") == drum_ch
     )
-    import struct
     stored = struct.unpack_from("<f", drum_iv.raw, IVNE_VOLUME_OFF)[0]
     assert stored == pytest.approx(linear_to_ivne_volume_float(0.177125), rel=1e-4)
     assert drum_iv.raw[IVNE_VOLUME_ACTIVE_OFF] == IVNE_VOLUME_ACTIVE_VAL

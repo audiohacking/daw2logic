@@ -2,38 +2,33 @@
 
 ## OCuA mixer (volume / pan / mute)
 
-Logic-validated on macOS (2026-06):
+Logic-validated on macOS (2026-06), including `volume_sweep_baseline.logicx`:
 
 | Field | Channel strip (`0xabf7` / `0x29f5` @0x70) | Notes |
 |-------|-------------------------------------------|-------|
-| Volume | `float32 LE @0x98` | `stored = dB + 7.5590658` (0 dB → ~7.559, −6 dB → 1.559) |
-| Active flag | `@0x4e = 0x03` | Required or Logic ignores `@0x98` on load |
-| Vol gate | `@0x79 = 0x3f` | Unity default is `0x5a`; required for display |
-| ivnE display vol | `float32 LE @0x1a6` | `abs(attenuation_dB) / 391.012` (companion field) |
-| ivnE vol active | `@0xcc = 0x04` | Audio channels when volume set (default `0x02`) |
-| **karT fader UI** | `float32 LE @0x48` | **`-attenuation_dB / 17`** (Logic reads this for display) |
-| karT mixer touch | `@0x26 = 0x14`, `@0x4f = 0x0c` | Set when volume/pan/mute edited |
-| Pan | `@0x7d` uint8 | `round(normalized * 127)` — center `64`, hard-left `-64` → `0` |
+| Volume | `float32 LE @0x98` | Often `stored = dB + 7.5590658`; see captures |
+| **Vol gate** | **`@0x79`** | **Must equal float byte `@0x9b`** |
+| Active flag | `@0x4e = 0x03` | Required or Logic ignores volume on load |
+| Unity | `@0x79=0x5a`, `@0x98=0000005a` | 0 dB |
+| Sweep captures | see `OCUA_VOLUME_CAPTURES` in `mixer_logic.py` | −6/−3/0/+3/+6 dB |
+| Pan | `@0x7d` uint8 | `round(normalized * 127)` |
 | Mute | `@0x7e` | `0x01` muted, `0x00` unmuted |
 
 Implemented in `daw2logic/mixer_logic.py`.
 
-### Capture a differential fixture (macOS + Logic Pro)
+### Volume sweep fixture
 
 ```bash
-bash scripts/macos/capture_mixer_fixture.sh /tmp/daw2logic-re
+bash scripts/macos/prepare_volume_sweep_capture.sh /tmp/daw2logic-re
 ```
 
-Edit the **Drumloop** row fader (channel `0x640000`), not template Inst 1 / Audio 1.
-The script diffs Drumloop and template Audio 1 in case the wrong row was selected.
+Authoritative capture: **`volume_sweep_baseline.logicx`** (Logic shows −6/−3/0/+3/+6 on the five tracks).
 
-Repeat for pan and mute. Prepare capture bundles:
+### Pan / mute captures
 
 ```bash
 bash scripts/macos/prepare_mixer_re_captures.sh /tmp/daw2logic-re
 ```
-
-Then follow the printed steps (Drumloop pan hard-left, Bass mute-only).
 
 ## AU embedding
 

@@ -58,7 +58,7 @@ The CLI prints a summary (tracks, regions, tempo) and lists warnings on stderr. 
 | Audio regions | Yes | Warp-aware slice + linear resample |
 | Track / region names | Yes | |
 | AU plugin presets | Sidecar | Copied to `Media/daw2logic Import/plugins/` |
-| Mixer volume / pan / mute | Native | OCuA gain + karT `@0x48` fader display + pan/mute bytes |
+| Mixer volume / pan / mute | Native | Logic-validated on `bitwig_simple` / `bitwig_mixer` (±0.1 dB). `@0x79` gate + `@0x98` float |
 | Automation | Sidecar | Per-track JSON under `Media/daw2logic Import/automation/` |
 | VST / CLAP plugins | Skipped | No Logic slot |
 | Clip fades | Warning only | Not in LogicProFormatWriter yet |
@@ -84,7 +84,7 @@ Tests are driven by demo fixtures built from the [Bitwig DAWproject example](thi
 | Fixture | Contents |
 |---------|----------|
 | `bitwig_simple.dawproject` | Bass MIDI + drumloop audio @ 149 BPM, mixer levels |
-| `bitwig_mixer.dawproject` | Pan + mute offsets (sidecar until RE); volume native |
+| `bitwig_mixer.dawproject` | Pan + mute + volume (Logic-validated) |
 | `bitwig_extended.dawproject` | Tempo map + markers |
 | `bitwig_interleaved.dawproject` | Same as simple but audio track before instrument |
 | `bitwig_au.dawproject` | AU plugin + volume automation (requires LogicFiles submodule) |
@@ -104,7 +104,7 @@ bash scripts/macos/validate_au_sidecar.sh out.logicx
 
 ### Reverse-engineering: OCuA mixer fields
 
-Logic stores fader/pan/mute in 205-byte `OCuA` channel strips. Offsets are not yet decoded. To contribute a differential fixture:
+Logic stores fader/pan/mute in 205-byte `OCuA` channel strips. Volume uses `@0x79` gate + `@0x98` float (see `mixer_logic.py`). To capture new calibration points:
 
 1. Run `bash scripts/macos/capture_mixer_fixture.sh` (or convert manually, change one fader in Logic, save)
 2. Diff strips: `python tools/ocua_mixer_re.py re.logicx re_vol.logicx --channel 0x580000`

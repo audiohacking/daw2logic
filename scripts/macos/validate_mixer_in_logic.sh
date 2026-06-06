@@ -26,12 +26,12 @@ def fmt(path, tname, ch, exp_vol, exp_pan, exp_mute):
     pd = ProjectData.parse((path / "Alternatives/000/ProjectData").read_bytes())
     raw = _ocua_for_channel(pd, ch).raw
     db = struct.unpack_from("<f", raw, 0x98)[0] - 7.5590658
+    exp_db = 20 * math.log10(exp_vol)
     pan = raw[0x7d] - 64
     mute = raw[0x7e]
-    exp_db = 20 * math.log10(exp_vol)
     exp_pan_logic = round(exp_pan * 127) - 64
     print(f"  {tname}:")
-    print(f"    volume: {db:+.1f} dB  (expect {exp_db:+.1f})")
+    print(f"    volume: {db:+.1f} dB in file (DAW {exp_db:+.1f}) @79=0x{raw[0x79]:02x} @98={raw[0x98:0x9c].hex()}")
     print(f"    pan:    {pan:+d}      (expect {exp_pan_logic:+d})")
     print(f"    mute:   {'yes' if mute else 'no':3s}     (expect {'yes' if exp_mute else 'no'})")
 

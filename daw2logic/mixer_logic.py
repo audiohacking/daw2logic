@@ -12,22 +12,45 @@ from .ir import Project, Track
 from .logicx_channels import channel_for_track
 from .track_order import _counting_ordinals, logic_aud_ordinal, logic_inst_ordinal
 
-# Logic-validated 2026-06 (drumloop_minus6db.logicx). Channel-strip volume:
-#   @0x98 float32 LE = dB + OCUA_VOLUME_DB_OFFSET  (0 dB -> ~7.559, -6 dB -> 1.559)
-# Logic ignores @0x98 unless the strip is marked active:
-#   @0x4e = 0x03  (required on save / for load)
-#   @0x79 = 0x3f  (unity default is 0x5a on both 0xabf7 and 0x29f5 strips)
+# Logic-validated 2026-06 (volume_sweep_baseline.logicx). Fader volume uses paired bytes:
+#   @0x79 gate byte MUST equal float32 @0x98 byte @0x9b (LE).
+#   @0x4e = 0x03 required. Unity 0 dB: @0x79=0x5a, @0x98=0000005a.
+# Logic maps @0x79 through a piecewise-linear table (NOT IEEE dB from @0x98).
+# Captured anchors (dB, gate, @0x98 bytes):
+#   -6 -> 0x3f 3c8fc73f   -3 -> 0x4b 7abeb94b   0 -> 0x5a 0000005a
+#   +3 -> 0x6a 6017f76a   +6 -> 0x7f 0000007f
+# Other levels: interpolate gate from anchors; lerp anchor @0x98 bodies (clamp extrap).
 OCUA_VOLUME_DB_OFF = 0x98
+OCUA_VOLUME_FLOAT_TAIL = 0x9B
 OCUA_VOLUME_DB_OFFSET = 7.5590658
+OCUA_UNITY_GATE = 0x5A
+OCUA_UNITY_VOLUME_BYTES = bytes.fromhex("0000005a")
+OCUA_VOLUME_CAPTURES: tuple[tuple[float, int, bytes], ...] = (
+    (-6.0, 0x3F, bytes.fromhex("3c8fc73f")),
+    (-3.0, 0x4B, bytes.fromhex("7abeb94b")),
+    (0.0, 0x5A, OCUA_UNITY_VOLUME_BYTES),
+    (3.0, 0x6A, bytes.fromhex("6017f76a")),
+    (6.0, 0x7F, bytes.fromhex("0000007f")),
+)
+OCUA_VOLUME_CAPTURE_TOLERANCE_DB = 0.08
+# (Logic fader display dB, @0x79 gate). Sweep anchors + user-validated bitwig_simple checks.
+OCUA_GATE_CALIBRATION: tuple[tuple[float, int], ...] = (
+    (-20.5, 0x1B),  # gate 0x1b + -6 body
+    (-14.7, 0x26),  # bitwig_simple Drumloop @ -15 dB DAW (2026-06)
+    (-13.4, 0x29),  # prior drum encode overshot high
+    (-6.0, 0x3F),
+    (-3.0, 0x4B),
+    (0.0, 0x5A),
+    (3.0, 0x6A),
+    (6.0, 0x7F),
+)
 OCUA_AUDIO_CFG = b"\xab\xf7"
 OCUA_INST_CFG = b"\x29\xf5"
 OCUA_ACTIVE_FLAG_OFF = 0x4e
 OCUA_ACTIVE_FLAG_VAL = 0x03
 OCUA_VOL_GATE_OFF = 0x79
-OCUA_VOL_GATE_VAL = 0x3F
 OCUA_AUDIO_VOLUME_DB_OFF = OCUA_VOLUME_DB_OFF  # alias
 OCUA_AUDIO_VOL_GATE_OFF = OCUA_VOL_GATE_OFF
-OCUA_AUDIO_VOL_GATE_VAL = OCUA_VOL_GATE_VAL
 
 # Logic-validated 2026-06 (drumloop_pan_left.logicx, hard-left -64):
 #   @0x7d uint8 = round(normalized_pan * 127)  (0.0 -> 0, 0.5 -> 64, 1.0 -> 127)
@@ -38,7 +61,7 @@ OCUA_MUTE_OFF = 0x7E
 OCUA_MUTE_ON = 0x01
 OCUA_MUTE_OFF_VAL = 0x00
 
-# Logic-validated 2026-06 (drumloop_minus6db.logicx): fader UI reads karT arrange row:
+# Logic-validated 2026-06 (drumloop_minus6db.logicx): also written on Logic volume save:
 #   @0x48 float32 LE = -attenuation_dB / 17  (-6 dB -> ~-0.353)
 #   @0x26 = 0x14, @0x4f = 0x0c when mixer edited (volume/pan/mute)
 KART_ARRANGE_TAG = 0x040000
@@ -69,6 +92,75 @@ def linear_to_logic_volume_db(linear: float) -> float:
     else:
         db = 20.0 * math.log10(linear)
     return db + OCUA_VOLUME_DB_OFFSET
+
+
+def _target_db_from_linear(linear: float) -> float:
+    if linear <= 0:
+        return -100.0
+    return 20.0 * math.log10(linear)
+
+
+def _interpolate_gate_db(target_db: float) -> int:
+    """Piecewise-linear @0x79 gate from measured Logic display calibration."""
+    pts = OCUA_GATE_CALIBRATION
+    if target_db <= pts[0][0]:
+        d0, g0 = pts[0]
+        d1, g1 = pts[1]
+    elif target_db >= pts[-1][0]:
+        d0, g0 = pts[-2]
+        d1, g1 = pts[-1]
+    else:
+        for (d0, g0), (d1, g1) in zip(pts, pts[1:]):
+            if d0 <= target_db <= d1:
+                break
+        else:
+            return pts[-1][1]
+    if d1 == d0:
+        return g0
+    t = (target_db - d0) / (d1 - d0)
+    return max(0, min(255, round(g0 + t * (g1 - g0))))
+
+
+def _lerp_volume_bytes(b0: bytes, b1: bytes, t: float) -> bytes:
+    return bytes(
+        max(0, min(255, round(b0[i] + t * (b1[i] - b0[i]))))
+        for i in range(4)
+    )
+
+
+def _volume_bytes_for_db(target_db: float, gate: int) -> bytes:
+    """Build @0x98 bytes with @0x9b == gate from anchor interpolation."""
+    pts = sorted(OCUA_VOLUME_CAPTURES, key=lambda row: row[0])
+    if target_db <= pts[0][0]:
+        base = pts[0][2]
+        return base[:3] + bytes([gate])
+    if target_db >= pts[-1][0]:
+        base = pts[-1][2]
+        return base[:3] + bytes([gate])
+    for (d0, _, b0), (d1, _, b1) in zip(pts, pts[1:]):
+        if d0 <= target_db <= d1:
+            t = (target_db - d0) / (d1 - d0)
+            body = _lerp_volume_bytes(b0, b1, t)
+            return body[:3] + bytes([gate])
+    base = pts[0][2]
+    return base[:3] + bytes([gate])
+
+
+def encode_ocua_volume(linear: float) -> tuple[int, bytes]:
+    """Return (@0x79 gate, @0x98..0x9b float bytes) for Logic fader display."""
+    if abs(linear - 1.0) < 1e-6:
+        return OCUA_UNITY_GATE, OCUA_UNITY_VOLUME_BYTES
+    target_db = _target_db_from_linear(linear)
+    for db, gate, vol_bytes in OCUA_VOLUME_CAPTURES:
+        if abs(db - target_db) <= OCUA_VOLUME_CAPTURE_TOLERANCE_DB:
+            return gate, vol_bytes
+    gate = _interpolate_gate_db(target_db)
+    return gate, _volume_bytes_for_db(target_db, gate)
+
+
+def encode_ocua_volume_bytes(linear: float) -> bytes:
+    """4-byte float for OCuA @0x98 (gate byte is separate @0x79)."""
+    return encode_ocua_volume(linear)[1]
 
 
 def logic_volume_db_to_linear(stored: float) -> float:
@@ -112,10 +204,6 @@ def _strip_cfg(raw: bytes) -> bytes | None:
     return None
 
 
-def _patch_float(raw: bytearray, offset: int, value: float) -> None:
-    struct.pack_into("<f", raw, offset, float(value))
-
-
 def _patch_mute(raw: bytearray, offset: int, muted: bool) -> None:
     raw[offset] = OCUA_MUTE_ON if muted else OCUA_MUTE_OFF_VAL
 
@@ -129,8 +217,9 @@ def patch_ocua_mixer(raw: bytes, *, volume_linear: float | None = None,
     changed = False
     if volume_linear is not None and _strip_cfg(raw) is not None:
         b[OCUA_ACTIVE_FLAG_OFF] = OCUA_ACTIVE_FLAG_VAL
-        b[OCUA_VOL_GATE_OFF] = OCUA_VOL_GATE_VAL
-        _patch_float(b, OCUA_VOLUME_DB_OFF, linear_to_logic_volume_db(volume_linear))
+        gate, vol_bytes = encode_ocua_volume(volume_linear)
+        b[OCUA_VOL_GATE_OFF] = gate
+        b[OCUA_VOLUME_DB_OFF:OCUA_VOLUME_DB_OFF + 4] = vol_bytes
         changed = True
     if pan_normalized is not None and OCUA_PAN_OFF is not None and _strip_cfg(raw) is not None:
         b[OCUA_PAN_OFF] = normalized_to_logic_pan_byte(pan_normalized)
@@ -165,7 +254,7 @@ def patch_ivne_volume(raw: bytes, *, volume_linear: float, is_audio: bool) -> by
     if len(raw) <= IVNE_VOLUME_OFF + 3:
         return None
     b = bytearray(raw)
-    _patch_float(b, IVNE_VOLUME_OFF, linear_to_ivne_volume_float(volume_linear))
+    struct.pack_into("<f", b, IVNE_VOLUME_OFF, linear_to_ivne_volume_float(volume_linear))
     if is_audio and len(raw) > IVNE_VOLUME_ACTIVE_OFF:
         b[IVNE_VOLUME_ACTIVE_OFF] = IVNE_VOLUME_ACTIVE_VAL
     return bytes(b)
@@ -183,7 +272,7 @@ def patch_kart_mixer(
     b = bytearray(raw)
     changed = False
     if volume_linear is not None:
-        _patch_float(b, KART_VOL_DISPLAY_OFF, linear_to_kart_volume_display(volume_linear))
+        struct.pack_into("<f", b, KART_VOL_DISPLAY_OFF, linear_to_kart_volume_display(volume_linear))
         changed = True
     if touch or volume_linear is not None:
         b[KART_TOUCH_OFF] = KART_TOUCH_VAL
@@ -200,7 +289,7 @@ def _mixer_needs_patch(track: Track) -> bool:
 
 
 def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
-    """Write mixer fields into ProjectData (OCuA gain + karT fader display)."""
+    """Write mixer fields into ProjectData (OCuA gain + karT / ivnE companions)."""
     pd_path = logicx_dir / "Alternatives" / "000" / "ProjectData"
     pd = ProjectData.parse(pd_path.read_bytes())
     ordinals = _counting_ordinals(project)
