@@ -3,12 +3,37 @@
 from __future__ import annotations
 
 import io
+import time
 import zipfile
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from . import parser
 from .convert import convert, format_conversion_notes
+
+# ZIP "DOS" timestamps must be >= 1980-01-01; WASI temp files often report epoch 0.
+_ZIP_EPOCH = 315532800  # 1980-01-01 00:00:00 UTC
+_MIN_ZIP_DATE = (1980, 1, 1, 0, 0, 0)
+
+
+def _zip_date_time(mtime: float) -> tuple[int, int, int, int, int, int]:
+    if mtime < _ZIP_EPOCH:
+        return _MIN_ZIP_DATE
+    return time.gmtime(mtime)[:6]  # type: ignore[return-value]
+
+
+def _zip_logicx_bundle(bundle_dir: Path) -> bytes:
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
+        for file_path in sorted(bundle_dir.rglob("*")):
+            if not file_path.is_file():
+                continue
+            arcname = file_path.relative_to(bundle_dir).as_posix()
+            info = zipfile.ZipInfo(arcname)
+            info.compress_type = zipfile.ZIP_DEFLATED
+            info.date_time = _zip_date_time(file_path.stat().st_mtime)
+            zf.writestr(info, file_path.read_bytes())
+    return buf.getvalue()
 
 
 def convert_dawproject_bytes(
@@ -36,12 +61,8 @@ def convert_dawproject_bytes(
         finally:
             parser.cleanup(project)
 
-        buf = io.BytesIO()
-        with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-            for file_path in sorted(out_path.rglob("*")):
-                if file_path.is_file():
-                    zf.write(file_path, file_path.relative_to(out_path).as_posix())
-        return buf.getvalue(), notes
+        buf = _zip_logicx_bundle(out_path)
+        return buf, notes
 
 
 def pack_conversion_result(logicx_zip: bytes, notes: str) -> bytes:
