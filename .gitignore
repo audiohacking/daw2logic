@@ -12,4 +12,6 @@ build/
 .DS_Store
 .venv/
 venv/
+.venv-wasm/
 tmp/
+web/wasm/*.wasm

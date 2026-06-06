@@ -1,0 +1,80 @@
+name: wasm-pages
+
+on:
+  push:
+    branches: [wasm]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: wasm-pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Install system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc libatomic1 patchelf
+
+      - name: Install Wasmer CLI
+        run: |
+          curl -fsSL https://get.wasmer.io | sh
+          echo "$HOME/.wasmer/bin" >> "$GITHUB_PATH"
+
+      - name: Build demo fixture
+        run: python tests/fixtures/build_bitwig_simple.py
+
+      - name: Build daw2logic.wasm
+        run: bash scripts/build_wasm.sh
+
+      - name: Smoke test WASM module
+        run: |
+          wasmer run web/wasm/daw2logic.wasm < tests/fixtures/bitwig_simple.dawproject > /tmp/out.bin
+          python3 - <<'PY'
+          import struct, zipfile, io
+          raw = open("/tmp/out.bin", "rb").read()
+          notes_len, zip_len = struct.unpack_from("<II", raw, 0)
+          notes = raw[8:8+notes_len].decode()
+          zip_bytes = raw[8+notes_len:8+notes_len+zip_len]
+          assert "daw2logic conversion notes" in notes
+          with zipfile.ZipFile(io.BytesIO(zip_bytes)) as zf:
+              assert any("ProjectData" in n for n in zf.namelist())
+          print("wasm smoke test OK")
+          PY
+
+      - name: Fetch COOP/COEP service worker
+        run: |
+          curl -fsSL \
+            https://raw.githubusercontent.com/gzuidhof/coi-serviceworker/master/coi-serviceworker.min.js \
+            -o web/coi-serviceworker.js
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: web
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
