@@ -26,6 +26,11 @@ pip install -q "py2wasm @ git+https://github.com/lum1n0us/Nuitka@dev/wasi_sync_u
 pip install -q -e "$ROOT/third_party/LogicProFormatWriter"
 pip install -q -e "$ROOT"
 
+apply_nuitka_wasi_patch() {
+  echo "==> Patching Nuitka for WASI static extension imports"
+  python "$ROOT/scripts/patch_nuitka_wasi.py"
+}
+
 LIBATOMIC=""
 if command -v gcc >/dev/null 2>&1; then
   LIBATOMIC="$(gcc -print-search-dirs 2>/dev/null | awk '/^install:/ {print $2}' | head -1 || true)"
@@ -33,6 +38,8 @@ fi
 export LDFLAGS="${LDFLAGS:-${LIBATOMIC:+-L$LIBATOMIC}}"
 
 mkdir -p "$(dirname "$OUT")"
+
+apply_nuitka_wasi_patch
 
 echo "==> Compiling wasm/main.py -> $OUT"
 py2wasm "$ROOT/wasm/main.py" -o "$OUT"
