@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project version="1.0">
+  <Application name="Bitwig Studio" version="5.0"/>
+  <Transport>
+    <Tempo max="666.000000" min="20.000000" unit="bpm" value="120.000000" id="id0" name="Tempo"/>
+    <TimeSignature denominator="4" numerator="4" id="id1"/>
+  </Transport>
+  <Structure>
+    <Track contentType="notes" loaded="true" id="id2" name="Synth">
+      <Channel audioChannels="2" destination="id15" role="regular" solo="false" id="id3">
+        <Devices>
+          <AuPlugin deviceID="12345678-1234-1234-1234-123456789012" deviceName="Demo AU" deviceRole="instrument" deviceVendor="Demo" loaded="true" id="id7" name="Demo AU">
+            <Enabled value="true" id="id8" name="On/Off"/>
+            <State path="plugins/demo.aupreset"/>
+          </AuPlugin>
+        </Devices>
+        <Mute value="false" id="id6" name="Mute"/>
+        <Volume max="2.000000" min="0.000000" unit="linear" value="0.800000" id="id4" name="Volume"/>
+        <Pan max="1.000000" min="0.000000" unit="normalized" value="0.500000" id="id5" name="Pan"/>
+      </Channel>
+    </Track>
+  </Structure>
+  <Arrangement id="id19">
+    <Lanes timeUnit="beats" id="id20">
+      <Lanes track="id2" id="id21">
+        <Clips id="id22">
+          <Clip time="0.0" duration="4.0" playStart="0.0">
+            <Notes id="id23">
+              <Note time="0.000000" duration="0.500000" channel="0" key="60" vel="0.800000" rel="0.800000"/>
+            </Notes>
+          </Clip>
+        </Clips>
+        <Points unit="linear" timeUnit="beats">
+          <Target parameter="id4"/>
+          <RealPoint time="0.0" value="0.5"/>
+          <RealPoint time="4.0" value="1.0"/>
+        </Points>
+      </Lanes>
+    </Lanes>
+  </Arrangement>
+  <Scenes/>
+</Project>

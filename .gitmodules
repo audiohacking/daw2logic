@@ -4,3 +4,6 @@
 [submodule "third_party/dawproject"]
 	path = third_party/dawproject
 	url = https://github.com/bitwig/dawproject.git
+[submodule "third_party/LogicFiles"]
+	path = third_party/LogicFiles
+	url = https://github.com/CraigStuntz/LogicFiles.git

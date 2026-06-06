@@ -53,7 +53,7 @@ def _real_param(channel: ET.Element, tag: str) -> float | None:
     return _float_attr(el, "value")
 
 
-def _parse_plugins(channel: ET.Element) -> tuple[PluginInfo, ...]:
+def _parse_plugins(channel: ET.Element, extract_dir: Path) -> tuple[PluginInfo, ...]:
     plugins: list[PluginInfo] = []
     devices = channel.find("Devices")
     if devices is None:
@@ -61,15 +61,59 @@ def _parse_plugins(channel: ET.Element) -> tuple[PluginInfo, ...]:
     for tag, kind in _PLUGIN_TAGS.items():
         for el in devices.findall(tag):
             state = el.find("State")
+            state_path = state.get("path") if state is not None else None
+            resolved = extract_dir / state_path if state_path else None
+            enabled_el = el.find("Enabled")
+            enabled = None
+            if enabled_el is not None and enabled_el.get("value") is not None:
+                enabled = enabled_el.get("value").lower() in {"true", "1"}
             plugins.append(
                 PluginInfo(
                     kind=kind,
                     name=el.get("deviceName") or el.get("name"),
                     device_id=el.get("deviceID"),
-                    state_path=state.get("path") if state is not None else None,
+                    vendor=el.get("deviceVendor"),
+                    role=el.get("deviceRole"),
+                    enabled=enabled,
+                    state_path=state_path,
+                    resolved_path=resolved if resolved and resolved.is_file() else None,
                 )
             )
     return tuple(plugins)
+
+
+def _channel_param_names(channel: ET.Element) -> dict[str, str]:
+    names: dict[str, str] = {}
+    for tag in ("Volume", "Pan", "Mute"):
+        el = channel.find(tag)
+        if el is not None and el.get("id"):
+            names[el.get("id")] = tag
+    return names
+
+
+def _parse_lane_automation(lane: ET.Element, param_names: dict[str, str]) -> tuple[dict, ...]:
+    curves: list[dict] = []
+    for points_el in lane.findall("Points"):
+        target_el = points_el.find("Target")
+        target_id = None
+        if target_el is not None:
+            target_id = target_el.get("parameter")
+        target_name = param_names.get(target_id, target_id or "unknown")
+        pts: list[dict] = []
+        for pt in points_el.findall("RealPoint"):
+            pts.append({"time": _float_attr(pt, "time"), "value": _float_attr(pt, "value")})
+        for pt in points_el.findall("BoolPoint"):
+            pts.append({"time": _float_attr(pt, "time"), "value": pt.get("value") == "true"})
+        if pts:
+            curves.append(
+                {
+                    "target": target_name,
+                    "target_id": target_id,
+                    "unit": points_el.get("unit"),
+                    "points": pts,
+                }
+            )
+    return tuple(curves)
 
 
 def _parse_tempo_map(root: ET.Element, default_bpm: float) -> tuple[TempoPoint, ...]:
@@ -144,15 +188,16 @@ def _channel_role(channel: ET.Element) -> str:
 def _warn_plugins(track_name: str, plugins: tuple[PluginInfo, ...]) -> list[str]:
     warnings: list[str] = []
     for plugin in plugins:
+        if plugin.kind == "au" and plugin.resolved_path:
+            continue
         if plugin.kind == "au" and plugin.state_path:
             warnings.append(
-                f"track '{track_name}': AU preset at {plugin.state_path} not embedded "
-                f"({plugin.name or 'AU plugin'})"
+                f"track '{track_name}': AU preset missing at {plugin.state_path}"
             )
-        else:
+        elif plugin.kind != "au":
             warnings.append(
                 f"track '{track_name}': {plugin.kind.upper()} plugin "
-                f"'{plugin.name or plugin.device_id or '?'}' not supported in Logic"
+                f"'{plugin.name or plugin.device_id or '?'}' has no Logic slot"
             )
     return warnings
 
@@ -204,7 +249,7 @@ def load(path: Path) -> Project:
     lane_by_track: dict[str, ET.Element] = {}
     for lanes in root.findall("./Arrangement//Lanes"):
         track_ref = lanes.get("track")
-        if track_ref and lanes.find("Clips") is not None:
+        if track_ref:
             lane_by_track[track_ref] = lanes
 
     if root.find("./Scenes/Scene") is not None or root.findall("./Scenes/*"):
@@ -225,22 +270,15 @@ def load(path: Path) -> Project:
         lane = lane_by_track.get(tid)
         midi_clips: tuple = ()
         audio_clips: tuple = ()
+        automation: tuple = ()
         if lane is not None:
             midi_clips, audio_clips = clips_from_lanes(lane)
-            if lane.find(".//Points") is not None:
-                warnings.append(
-                    f"track '{track_el.get('name', tid)}': track automation not imported"
-                )
+            automation = _parse_lane_automation(lane, _channel_param_names(channel))
 
-        plugins = _parse_plugins(channel)
+        plugins = _parse_plugins(channel, extract_dir)
         warnings.extend(_warn_plugins(track_el.get("name", tid), plugins))
 
         vol, pan = _real_param(channel, "Volume"), _real_param(channel, "Pan")
-        if vol is not None or pan is not None or _bool_param(channel, "Mute") is not None:
-            warnings.append(
-                f"track '{track_el.get('name', tid)}': mixer settings "
-                "(volume/pan/mute) not imported"
-            )
 
         tracks.append(
             Track(
@@ -254,6 +292,7 @@ def load(path: Path) -> Project:
                 mute=_bool_param(channel, "Mute"),
                 solo=channel.get("solo", "").lower() == "true",
                 plugins=plugins,
+                automation=automation,
                 midi_clips=midi_clips,
                 audio_clips=audio_clips,
             )

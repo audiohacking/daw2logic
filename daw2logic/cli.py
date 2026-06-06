@@ -56,6 +56,7 @@ def main(argv: list[str] | None = None) -> int:
             "midi_regions": report.midi_regions,
             "audio_regions": report.audio_regions,
             "markers": report.markers,
+            "plugins_copied": report.plugins_copied,
             "tempo": report.tempo,
             "title": report.title,
         }

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import plistlib
 import struct
 import wave
@@ -76,13 +77,14 @@ def test_convert_extended_tempo_map_and_markers(
     assert tempo_map[1][1] == pytest.approx(140.0)
 
 
-def test_convert_reports_mixer_and_plugins(bitwig_simple_dawproject):
-    project = load(bitwig_simple_dawproject)
-    try:
-        warnings = project.warnings
-        assert any("mixer settings" in w for w in warnings)
-    finally:
-        cleanup(project)
+def test_convert_reports_mixer_sidecar(bitwig_simple_dawproject, logicx_output):
+    report = convert_file(bitwig_simple_dawproject, logicx_output)
+    assert any("mixer values exported to sidecar" in w for w in report.warnings)
+    manifest = json.loads(
+        (logicx_output / "Media/daw2logic Import/manifest.json").read_text()
+    )
+    bass = next(t for t in manifest["tracks"] if t["name"] == "Bass")
+    assert bass["mixer"]["volume_linear"] == pytest.approx(0.659140)
 
 
 def test_convert_refuses_overwrite(bitwig_simple_dawproject, logicx_output):

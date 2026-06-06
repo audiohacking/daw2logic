@@ -56,7 +56,11 @@ class PluginInfo:
     kind: str
     name: str | None
     device_id: str | None
-    state_path: str | None
+    vendor: str | None = None
+    role: str | None = None
+    enabled: bool | None = None
+    state_path: str | None = None
+    resolved_path: Path | None = None
 
 
 @dataclass(frozen=True)
@@ -71,6 +75,7 @@ class Track:
     mute: bool | None = None
     solo: bool | None = None
     plugins: tuple[PluginInfo, ...] = ()
+    automation: tuple[dict, ...] = ()
     midi_clips: tuple[MidiClip, ...] = ()
     audio_clips: tuple[AudioClip, ...] = ()
 

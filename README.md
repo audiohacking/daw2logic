@@ -11,6 +11,7 @@ git submodule update --init --recursive
 | Submodule | Purpose |
 |-----------|---------|
 | [`third_party/LogicProFormatWriter`](third_party/LogicProFormatWriter) | Writes Logic `ProjectData` / `.logicx` bundles (`logicx` Python package) |
+| [`third_party/LogicFiles`](third_party/LogicFiles) | AU preset format reference; macOS validation via `scripts/macos/validate_au_sidecar.sh` |
 | [`third_party/dawproject`](third_party/dawproject) | Format reference + demo WAV for test fixtures |
 
 ## Setup
@@ -38,7 +39,14 @@ daw2logic song.dawproject -o song.logicx --report warnings.json
 
 ## Status
 
-Imports tempo maps, meter maps, markers, MIDI notes (with clip names), and audio
-regions (with warp-aware slice/resample, clip names, and region length). Reports
-unsupported features (plugins, mixer automation, fades, scenes, track colors) in
-`--report` warnings/skipped lists.
+Imports tempo maps, meter maps, markers, MIDI notes, and audio regions (with
+warp-aware slice/resample). AU plugin presets, mixer levels, and automation
+curves are exported under `Media/daw2logic Import/` in the `.logicx` bundle.
+VST/CLAP plugins and native Logic channel-strip/plugin embedding require
+ProjectData writers not yet available (see `daw2logic/mixer.py`).
+
+### macOS: validate bundled AU presets
+
+```bash
+bash scripts/macos/validate_au_sidecar.sh out.logicx
+```

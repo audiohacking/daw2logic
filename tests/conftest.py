@@ -31,6 +31,15 @@ def bitwig_extended_dawproject() -> Path:
     return path
 
 
+@pytest.fixture(scope="session")
+def bitwig_au_dawproject() -> Path:
+    path = FIXTURES / "bitwig_au.dawproject"
+    if not path.is_file():
+        subprocess.run([sys.executable, str(BUILD_SCRIPT)], check=True, cwd=ROOT)
+    assert path.is_file()
+    return path
+
+
 @pytest.fixture
 def logicx_output(tmp_path: Path) -> Path:
     return tmp_path / "out.logicx"
