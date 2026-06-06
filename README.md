@@ -1,3 +1,5 @@
+<img width="200" src="https://github.com/user-attachments/assets/9d709079-c1b6-4cf2-9729-7a3a94edfff3" />
+
 # daw2logic
 
 Convert [DAWproject](https://github.com/bitwig/dawproject) (`.dawproject`) files to Logic Pro (`.logicx`) projects.
