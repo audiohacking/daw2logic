@@ -40,6 +40,10 @@ daw2logic song.dawproject -o song.logicx --report report.json  # optional JSON r
 
 On success the CLI is quiet. Conversion notes (warnings, skipped items, stats) are written to `song.txt` beside the output bundle. Errors go to stderr. Use `--report` for structured JSON instead of or in addition to the text notes.
 
+## Browser converter (experimental)
+
+A WebAssembly build runs in the browser — drop a `.dawproject` file, get a `.logicx.zip` download. Nothing is uploaded to a server. Deployed via GitHub Pages on each push to `main` (see **wasm-pages** workflow). Local build: [`docs/WASM.md`](docs/WASM.md).
+
 ## Dependencies (git submodules)
 
 | Submodule | Purpose |

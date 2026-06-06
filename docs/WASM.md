@@ -49,7 +49,7 @@ For `@wasmer/sdk` threading, the page uses [coi-serviceworker](https://github.co
 
 ## GitHub Pages
 
-Push to the `wasm` branch — the **wasm-pages** workflow:
+Push to `main` — the **wasm-pages** workflow:
 
 1. Checks out submodules (LogicProFormatWriter seeds are required at compile time)
 2. Builds `web/wasm/daw2logic.wasm` on Ubuntu
