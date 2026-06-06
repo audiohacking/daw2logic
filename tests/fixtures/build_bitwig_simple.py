@@ -48,6 +48,7 @@ def build_all() -> list[Path]:
     _ensure_interleaved_fixture()
     paths = [
         _write("bitwig_simple.dawproject", FIXTURES / "bitwig_simple"),
+        _write("bitwig_mixer.dawproject", FIXTURES / "bitwig_mixer"),
         _write("bitwig_extended.dawproject", FIXTURES / "bitwig_extended"),
         _write("bitwig_interleaved.dawproject", FIXTURES / "bitwig_interleaved"),
     ]

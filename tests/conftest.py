@@ -23,6 +23,15 @@ def bitwig_simple_dawproject() -> Path:
 
 
 @pytest.fixture(scope="session")
+def bitwig_mixer_dawproject() -> Path:
+    path = FIXTURES / "bitwig_mixer.dawproject"
+    if not path.is_file():
+        subprocess.run([sys.executable, str(BUILD_SCRIPT)], check=True, cwd=ROOT)
+    assert path.is_file()
+    return path
+
+
+@pytest.fixture(scope="session")
 def bitwig_extended_dawproject() -> Path:
     path = FIXTURES / "bitwig_extended.dawproject"
     if not path.is_file():

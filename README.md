@@ -84,6 +84,7 @@ Tests are driven by demo fixtures built from the [Bitwig DAWproject example](thi
 | Fixture | Contents |
 |---------|----------|
 | `bitwig_simple.dawproject` | Bass MIDI + drumloop audio @ 149 BPM, mixer levels |
+| `bitwig_mixer.dawproject` | Pan + mute offsets (sidecar until RE); volume native |
 | `bitwig_extended.dawproject` | Tempo map + markers |
 | `bitwig_interleaved.dawproject` | Same as simple but audio track before instrument |
 | `bitwig_au.dawproject` | AU plugin + volume automation (requires LogicFiles submodule) |

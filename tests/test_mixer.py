@@ -68,6 +68,33 @@ def test_convert_patches_bass_volume(bitwig_simple_dawproject, logicx_output):
     assert not any("track 'Drumloop': mixer values exported to sidecar" in w for w in report.warnings)
 
 
+def test_bitwig_mixer_fixture_parsed(bitwig_mixer_dawproject):
+    from daw2logic.parser import load
+
+    project = load(bitwig_mixer_dawproject)
+    bass = next(t for t in project.tracks if t.name == "Bass")
+    drum = next(t for t in project.tracks if t.name == "Drumloop")
+    assert bass.mute is True
+    assert bass.pan == pytest.approx(0.25)
+    assert drum.pan == pytest.approx(0.75)
+    assert drum.mute is False
+
+
+def test_bitwig_mixer_exports_pan_mute_sidecar(bitwig_mixer_dawproject, logicx_output):
+    import json
+
+    report = convert_file(bitwig_mixer_dawproject, logicx_output)
+    assert "Bass" in report.mixer_patched_tracks  # volume native
+    manifest = json.loads(
+        (logicx_output / "Media/daw2logic Import/manifest.json").read_text()
+    )
+    bass = next(t for t in manifest["tracks"] if t["name"] == "Bass")
+    drum = next(t for t in manifest["tracks"] if t["name"] == "Drumloop")
+    assert bass["mixer"]["mute"] is True
+    assert bass["mixer"]["pan_normalized"] == pytest.approx(0.25)
+    assert drum["mixer"]["pan_normalized"] == pytest.approx(0.75)
+
+
 def test_logic_re_fixture_if_present():
     """Optional: validate against /tmp/daw2logic-re Logic differential."""
     base = Path("/tmp/daw2logic-re/re.logicx")
