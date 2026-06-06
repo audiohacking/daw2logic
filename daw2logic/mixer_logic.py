@@ -12,19 +12,22 @@ from .ir import Project, Track
 from .logicx_channels import channel_for_track
 from .track_order import _counting_ordinals, logic_aud_ordinal, logic_inst_ordinal
 
-# Logic-validated 2026-06 (drumloop_minus6db.logicx). Audio strip volume:
+# Logic-validated 2026-06 (drumloop_minus6db.logicx). Channel-strip volume:
 #   @0x98 float32 LE = dB + OCUA_VOLUME_DB_OFFSET  (0 dB -> ~7.559, -6 dB -> 1.559)
 # Logic ignores @0x98 unless the strip is marked active:
 #   @0x4e = 0x03  (required on save / for load)
-#   @0x79 = 0x3f  (audio strips only, 0xabf7 @0x70)
-OCUA_AUDIO_VOLUME_DB_OFF = 0x98
+#   @0x79 = 0x3f  (unity default is 0x5a on both 0xabf7 and 0x29f5 strips)
+OCUA_VOLUME_DB_OFF = 0x98
 OCUA_VOLUME_DB_OFFSET = 7.5590658
 OCUA_AUDIO_CFG = b"\xab\xf7"
 OCUA_INST_CFG = b"\x29\xf5"
 OCUA_ACTIVE_FLAG_OFF = 0x4e
 OCUA_ACTIVE_FLAG_VAL = 0x03
-OCUA_AUDIO_VOL_GATE_OFF = 0x79
-OCUA_AUDIO_VOL_GATE_VAL = 0x3F
+OCUA_VOL_GATE_OFF = 0x79
+OCUA_VOL_GATE_VAL = 0x3F
+OCUA_AUDIO_VOLUME_DB_OFF = OCUA_VOLUME_DB_OFF  # alias
+OCUA_AUDIO_VOL_GATE_OFF = OCUA_VOL_GATE_OFF
+OCUA_AUDIO_VOL_GATE_VAL = OCUA_VOL_GATE_VAL
 
 OCUA_PAN_OFF: int | None = None
 OCUA_MUTE_OFF: int | None = None
@@ -46,8 +49,13 @@ def logic_volume_db_to_linear(stored: float) -> float:
     return 10.0 ** (db / 20.0)
 
 
-def _is_audio_strip(raw: bytes) -> bool:
-    return len(raw) > 0x72 and raw[0x70:0x72] == OCUA_AUDIO_CFG
+def _strip_cfg(raw: bytes) -> bytes | None:
+    if len(raw) <= 0x72:
+        return None
+    cfg = raw[0x70:0x72]
+    if cfg in (OCUA_AUDIO_CFG, OCUA_INST_CFG):
+        return cfg
+    return None
 
 
 def _patch_float(raw: bytearray, offset: int, value: float) -> None:
@@ -68,10 +76,10 @@ def patch_ocua_mixer(raw: bytes, *, volume_linear: float | None = None,
         return None
     b = bytearray(raw)
     changed = False
-    if volume_linear is not None and _is_audio_strip(raw):
+    if volume_linear is not None and _strip_cfg(raw) is not None:
         b[OCUA_ACTIVE_FLAG_OFF] = OCUA_ACTIVE_FLAG_VAL
-        b[OCUA_AUDIO_VOL_GATE_OFF] = OCUA_AUDIO_VOL_GATE_VAL
-        _patch_float(b, OCUA_AUDIO_VOLUME_DB_OFF, linear_to_logic_volume_db(volume_linear))
+        b[OCUA_VOL_GATE_OFF] = OCUA_VOL_GATE_VAL
+        _patch_float(b, OCUA_VOLUME_DB_OFF, linear_to_logic_volume_db(volume_linear))
         changed = True
     if pan_normalized is not None and OCUA_PAN_OFF is not None:
         _patch_float(b, OCUA_PAN_OFF, pan_normalized)
@@ -89,7 +97,7 @@ def _mixer_needs_patch(track: Track) -> bool:
 
 
 def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
-    """Write mixer fields into ProjectData OCuA strips (audio volume native; inst TBD)."""
+    """Write mixer fields into ProjectData OCuA strips (volume native on inst + audio)."""
     pd_path = logicx_dir / "Alternatives" / "000" / "ProjectData"
     pd = ProjectData.parse(pd_path.read_bytes())
     ordinals = _counting_ordinals(project)
@@ -112,11 +120,6 @@ def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
         oc = _ocua_for_channel(pd, ch)
         if oc is None:
             report.warnings.append(f"track '{track.name}': no OCuA strip for channel 0x{ch:x}")
-            continue
-        if has_midi and track.volume is not None and oc.raw[0x70:0x72] == OCUA_INST_CFG:
-            report.warnings.append(
-                f"track '{track.name}': instrument strip volume not RE'd yet (sidecar only)"
-            )
             continue
         new_raw = patch_ocua_mixer(
             oc.raw,

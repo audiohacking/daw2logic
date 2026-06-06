@@ -41,7 +41,7 @@ def export_sidecars(logicx_dir: Path, project: Project, report) -> None:
         "tracks": [],
         "notes": [
             "AU presets are copied for manual loading in Logic Pro (Channel Strip settings).",
-            "Mixer JSON is a fallback reference; audio track volume is written to ProjectData when supported.",
+            "Mixer JSON is a fallback reference; track volume is written to ProjectData when supported.",
         ],
     }
 

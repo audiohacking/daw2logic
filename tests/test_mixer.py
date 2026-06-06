@@ -11,6 +11,7 @@ from daw2logic.convert import convert_file
 from daw2logic.logicx_channels import audio_channels, instrument_channels
 from daw2logic.mixer_logic import (
     OCUA_AUDIO_VOLUME_DB_OFF,
+    OCUA_VOL_GATE_OFF,
     OCUA_VOLUME_DB_OFFSET,
     apply_mixer,
     linear_to_logic_volume_db,
@@ -52,12 +53,18 @@ def test_convert_patches_drumloop_volume(bitwig_simple_dawproject, logicx_output
     assert "Drumloop" in report.mixer_patched_tracks
 
 
-def test_convert_bass_volume_still_sidecar(bitwig_simple_dawproject, logicx_output):
+def test_convert_patches_bass_volume(bitwig_simple_dawproject, logicx_output):
     report = convert_file(bitwig_simple_dawproject, logicx_output)
+    pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
+    ch = instrument_channels(pd)[2]  # synthesized Bass (ordinal 2)
+    oc = _ocua_for_channel(pd, ch)
+    stored = struct.unpack_from("<f", oc.raw, OCUA_AUDIO_VOLUME_DB_OFF)[0]
+    expected = linear_to_logic_volume_db(0.659140)
+    assert stored == pytest.approx(expected, rel=1e-4)
+    assert oc.raw[OCUA_VOL_GATE_OFF] == 0x3F
+    assert "Bass" in report.mixer_patched_tracks
     assert "Drumloop" in report.mixer_patched_tracks
-    assert "Bass" not in report.mixer_patched_tracks
-    assert any("instrument strip volume not RE'd" in w for w in report.warnings)
-    assert any("track 'Bass': mixer values exported to sidecar" in w for w in report.warnings)
+    assert not any("mixer values exported to sidecar" in w and "Bass" in w for w in report.warnings)
     assert not any("track 'Drumloop': mixer values exported to sidecar" in w for w in report.warnings)
 
 

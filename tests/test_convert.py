@@ -77,9 +77,9 @@ def test_convert_extended_tempo_map_and_markers(
     assert tempo_map[1][1] == pytest.approx(140.0)
 
 
-def test_convert_reports_mixer_sidecar(bitwig_simple_dawproject, logicx_output):
+def test_convert_exports_mixer_manifest(bitwig_simple_dawproject, logicx_output):
     report = convert_file(bitwig_simple_dawproject, logicx_output)
-    assert any("track 'Bass': mixer values exported to sidecar" in w for w in report.warnings)
+    assert "Bass" in report.mixer_patched_tracks
     assert "Drumloop" in report.mixer_patched_tracks
     manifest = json.loads(
         (logicx_output / "Media/daw2logic Import/manifest.json").read_text()

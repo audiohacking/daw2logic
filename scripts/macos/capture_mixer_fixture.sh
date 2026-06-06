@@ -32,8 +32,11 @@ echo "Diffing OCuA strips for Drumloop (channel 0x640000):"
 cd "$root"
 PYTHONPATH=third_party/LogicProFormatWriter python3 tools/ocua_mixer_re.py "$baseline" "$after" --channel 0x640000
 echo
+echo "For instrument volume RE, diff Bass (0x600000):"
+PYTHONPATH=third_party/LogicProFormatWriter python3 tools/ocua_mixer_re.py "$baseline" "$after" --channel 0x600000
+echo
 echo "Also diff template Audio 1 (0x5c0000) if you edited the wrong row:"
 PYTHONPATH=third_party/LogicProFormatWriter python3 tools/ocua_mixer_re.py "$baseline" "$after" --channel 0x5c0000
 echo
-echo "Volume encoding: audio strips @0x98 float = dB + 7.559 (see daw2logic/mixer_logic.py)"
-echo "@0x4e 00->03 is a save/touch flag on all strips, not fader level."
+echo "Volume encoding: @0x98 float = dB + 7.559 on inst (0x29f5) and audio (0xabf7) strips."
+echo "Requires @0x4e=0x03 and @0x79=0x3f or Logic displays 0 dB."
