@@ -32,7 +32,11 @@ OCUA_AUDIO_VOL_GATE_VAL = OCUA_VOL_GATE_VAL
 # Logic-validated 2026-06 (drumloop_pan_left.logicx, hard-left -64):
 #   @0x7d uint8 = round(normalized_pan * 127)  (0.0 -> 0, 0.5 -> 64, 1.0 -> 127)
 OCUA_PAN_OFF = 0x7D
-OCUA_MUTE_OFF: int | None = None
+# Logic-validated 2026-06 (bass_muted.logicx):
+#   @0x7e = 0x01 when muted, 0x00 when unmuted
+OCUA_MUTE_OFF = 0x7E
+OCUA_MUTE_ON = 0x01
+OCUA_MUTE_OFF_VAL = 0x00
 
 
 def linear_to_logic_volume_db(linear: float) -> float:
@@ -73,11 +77,8 @@ def _patch_float(raw: bytearray, offset: int, value: float) -> None:
     struct.pack_into("<f", raw, offset, float(value))
 
 
-def _patch_mute(raw: bytearray, offset: int | None, muted: bool) -> bool:
-    if offset is None or offset >= len(raw):
-        return False
-    raw[offset] = 1 if muted else 0
-    return True
+def _patch_mute(raw: bytearray, offset: int, muted: bool) -> None:
+    raw[offset] = OCUA_MUTE_ON if muted else OCUA_MUTE_OFF_VAL
 
 
 def patch_ocua_mixer(raw: bytes, *, volume_linear: float | None = None,
@@ -95,8 +96,9 @@ def patch_ocua_mixer(raw: bytes, *, volume_linear: float | None = None,
     if pan_normalized is not None and OCUA_PAN_OFF is not None and _strip_cfg(raw) is not None:
         b[OCUA_PAN_OFF] = normalized_to_logic_pan_byte(pan_normalized)
         changed = True
-    if mute is not None and OCUA_MUTE_OFF is not None:
-        changed |= _patch_mute(b, OCUA_MUTE_OFF, mute)
+    if mute is not None and _strip_cfg(raw) is not None:
+        _patch_mute(b, OCUA_MUTE_OFF, mute)
+        changed = True
     return bytes(b) if changed else None
 
 
@@ -108,7 +110,7 @@ def _mixer_needs_patch(track: Track) -> bool:
 
 
 def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
-    """Write mixer fields into ProjectData OCuA strips (volume + pan native on inst + audio)."""
+    """Write mixer fields into ProjectData OCuA strips (volume, pan, mute native)."""
     pd_path = logicx_dir / "Alternatives" / "000" / "ProjectData"
     pd = ProjectData.parse(pd_path.read_bytes())
     ordinals = _counting_ordinals(project)
@@ -132,11 +134,16 @@ def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
         if oc is None:
             report.warnings.append(f"track '{track.name}': no OCuA strip for channel 0x{ch:x}")
             continue
+        patch_kwargs: dict = {}
+        if track.volume is not None and abs(track.volume - 1.0) >= 1e-6:
+            patch_kwargs["volume_linear"] = track.volume
+        if track.pan is not None and abs(track.pan - 0.5) >= 1e-6:
+            patch_kwargs["pan_normalized"] = track.pan
+        if track.mute is True:
+            patch_kwargs["mute"] = True
         new_raw = patch_ocua_mixer(
             oc.raw,
-            volume_linear=track.volume,
-            pan_normalized=track.pan,
-            mute=track.mute,
+            **patch_kwargs,
         )
         if new_raw is None:
             report.warnings.append(
