@@ -34,18 +34,22 @@ def test_convert_bitwig_simple_roundtrip(tmp_path):
     assert any("Alternatives/000/ProjectData" in n for n in names)
 
 
-def test_zip_logicx_bundle_accepts_epoch_mtime(tmp_path):
+def test_zip_logicx_bundle_uses_current_time_not_file_mtime(tmp_path):
+    import os
+    import time
+
     bundle = tmp_path / "out.logicx"
     bundle.mkdir()
     sample = bundle / "hello.txt"
     sample.write_text("ok", encoding="utf-8")
-    sample.touch()
-    import os
-
     os.utime(sample, (0, 0))
+
+    after = time.gmtime()[:6]
 
     payload = _zip_logicx_bundle(bundle)
     with zipfile.ZipFile(io.BytesIO(payload)) as zf:
         assert zf.read("hello.txt") == b"ok"
         info = zf.getinfo("hello.txt")
-    assert info.date_time == (1980, 1, 1, 0, 0, 0)
+    assert info.date_time[0] >= 1980
+    assert info.date_time >= (1980, 1, 1, 0, 0, 0)
+    assert info.date_time <= after

@@ -11,18 +11,12 @@ from tempfile import TemporaryDirectory
 from . import parser
 from .convert import convert, format_conversion_notes
 
-# ZIP "DOS" timestamps must be >= 1980-01-01; WASI temp files often report epoch 0.
-_ZIP_EPOCH = 315532800  # 1980-01-01 00:00:00 UTC
-_MIN_ZIP_DATE = (1980, 1, 1, 0, 0, 0)
-
-
-def _zip_date_time(mtime: float) -> tuple[int, int, int, int, int, int]:
-    if mtime < _ZIP_EPOCH:
-        return _MIN_ZIP_DATE
-    return time.gmtime(mtime)[:6]  # type: ignore[return-value]
-
-
 def _zip_logicx_bundle(bundle_dir: Path) -> bytes:
+    """Zip a .logicx bundle directory for browser download.
+
+    WASI temp files often report mtime 0; use conversion time instead of st_mtime.
+    """
+    zip_time = time.gmtime()[:6]  # type: ignore[assignment]
     buf = io.BytesIO()
     with zipfile.ZipFile(buf, "w", compression=zipfile.ZIP_DEFLATED) as zf:
         for file_path in sorted(bundle_dir.rglob("*")):
@@ -31,7 +25,7 @@ def _zip_logicx_bundle(bundle_dir: Path) -> bytes:
             arcname = file_path.relative_to(bundle_dir).as_posix()
             info = zipfile.ZipInfo(arcname)
             info.compress_type = zipfile.ZIP_DEFLATED
-            info.date_time = _zip_date_time(file_path.stat().st_mtime)
+            info.date_time = zip_time
             zf.writestr(info, file_path.read_bytes())
     return buf.getvalue()
 
