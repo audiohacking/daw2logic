@@ -67,6 +67,7 @@ Enable Pages in repo settings: **Source → GitHub Actions**.
 | Python version | WASM build requires **3.11** (not 3.12+) |
 | Binary size | Full converter + libpython WASM is large (expect tens of MB) |
 | Browser headers | Needs COOP/COEP for Wasmer SDK; handled via service worker on Pages |
+| Browser seeds | `app.js` fetches `web/wasm/logicx/data/*` and mounts them at `/seeds` for the WASI module |
 | Folder drop | UI currently accepts `.dawproject` files only; folder → zip client-side is TODO |
 | AU sidecars | Same as CLI — presets export to sidecar paths inside the bundle zip |
 

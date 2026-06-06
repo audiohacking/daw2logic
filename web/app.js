@@ -7,6 +7,8 @@
 import { init, Wasmer } from "https://cdn.jsdelivr.net/npm/@wasmer/sdk@0.9.0/dist/index.mjs";
 
 const WASM_URL = new URL("./wasm/daw2logic.wasm", import.meta.url);
+const SEEDS_BASE = new URL("./wasm/logicx/data/", import.meta.url);
+const SEED_FILES = ["audio_base.seed", "mixed_base.seed", "infra.json.gz"];
 const SDK_WASM_URL =
   "https://cdn.jsdelivr.net/npm/@wasmer/sdk@0.9.0/dist/wasmer_js_bg.wasm";
 
@@ -52,6 +54,21 @@ function showResults(notes, logicxZip, baseName) {
   resultsEl.classList.remove("hidden");
 }
 
+async function loadSeedMount() {
+  /** @type {Record<string, Uint8Array>} */
+  const seeds = {};
+  for (const name of SEED_FILES) {
+    const response = await fetch(new URL(name, SEEDS_BASE));
+    if (!response.ok) {
+      throw new Error(
+        `Seed file missing (${response.status}): ${name}. Build with scripts/build_wasm.sh or wait for the GitHub Pages workflow.`
+      );
+    }
+    seeds[name] = new Uint8Array(await response.arrayBuffer());
+  }
+  return seeds;
+}
+
 async function ensureRuntime() {
   if (!runtimeReady) {
     runtimeReady = (async () => {
@@ -89,14 +106,20 @@ async function convertBytes(inputBytes, sourceName) {
   const wasmBytes = await ensureRuntime();
   setStatus("Converting…");
 
-  const pkg = await Wasmer.fromFile(wasmBytes);
+  const [pkg, seeds] = await Promise.all([
+    Wasmer.fromFile(wasmBytes),
+    loadSeedMount(),
+  ]);
   if (!pkg.entrypoint) {
     throw new Error("compiled module has no WASI entrypoint");
   }
 
   const stdoutChunks = [];
   const stderrChunks = [];
-  const instance = await pkg.entrypoint.run({ stdin: inputBytes });
+  const instance = await pkg.entrypoint.run({
+    stdin: inputBytes,
+    mount: { "/seeds": seeds },
+  });
   await instance.stdout?.pipeTo(
     new WritableStream({
       write(chunk) {
