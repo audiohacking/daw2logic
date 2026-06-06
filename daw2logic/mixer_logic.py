@@ -38,17 +38,32 @@ OCUA_MUTE_OFF = 0x7E
 OCUA_MUTE_ON = 0x01
 OCUA_MUTE_OFF_VAL = 0x00
 
-# Logic-validated 2026-06 (drumloop_minus6db.logicx): fader display also reads ivnE:
-#   @0x1a6 float32 LE = abs(attenuation_dB) / IVNE_VOLUME_DB_SCALE  (-6 dB -> ~0.01535)
-#   @0xcc = 0x04 on audio channels when volume is set (default 0x02)
+# Logic-validated 2026-06 (drumloop_minus6db.logicx): fader UI reads karT arrange row:
+#   @0x48 float32 LE = -attenuation_dB / 17  (-6 dB -> ~-0.353)
+#   @0x26 = 0x14, @0x4f = 0x0c when mixer edited (volume/pan/mute)
+KART_ARRANGE_TAG = 0x040000
+KART_VOL_DISPLAY_OFF = 0x48
+KART_VOL_DB_DIVISOR = 17.0
+KART_TOUCH_OFF = 0x26
+KART_TOUCH_VAL = 0x14
+KART_MIXER_TOUCH_OFF = 0x4F
+KART_MIXER_TOUCH_VAL = 0x0C
+
+# Secondary ivnE field (also written on Logic volume save; keep in sync):
 IVNE_VOLUME_OFF = 0x1A6
 IVNE_VOLUME_ACTIVE_OFF = 0xCC
 IVNE_VOLUME_ACTIVE_VAL = 0x04
 IVNE_VOLUME_DB_SCALE = 6.0 / struct.unpack("<f", bytes.fromhex("80797b3c"))[0]
 
 
+def _attenuation_db(linear: float) -> float:
+    if linear <= 0:
+        return 100.0
+    return max(0.0, -20.0 * math.log10(linear))
+
+
 def linear_to_logic_volume_db(linear: float) -> float:
-    """DAWproject linear gain -> Logic OCuA float @0x98 (audio strips)."""
+    """DAWproject linear gain -> Logic OCuA float @0x98."""
     if linear <= 0:
         db = -100.0
     else:
@@ -72,12 +87,17 @@ def logic_pan_byte_to_normalized(stored: int) -> float:
     return stored / 127.0
 
 
+def linear_to_kart_volume_display(linear: float) -> float:
+    """DAWproject linear gain -> karT @0x48 (Logic fader display)."""
+    att_db = _attenuation_db(linear)
+    if att_db < 1e-6:
+        return 0.0
+    return -att_db / KART_VOL_DB_DIVISOR
+
+
 def linear_to_ivne_volume_float(linear: float) -> float:
-    """DAWproject linear gain -> ivnE @0x1a6 (Logic fader display field)."""
-    if linear <= 0:
-        att_db = 100.0
-    else:
-        att_db = max(0.0, -20.0 * math.log10(linear))
+    """DAWproject linear gain -> ivnE @0x1a6 (companion volume field)."""
+    att_db = _attenuation_db(linear)
     if att_db < 1e-6:
         return 0.0
     return att_db / IVNE_VOLUME_DB_SCALE
@@ -130,8 +150,18 @@ def _ivne_for_channel(pd: ProjectData, channel: int):
     return None
 
 
+def _kart_arrange_for_channel(pd: ProjectData, channel: int):
+    for r in pd.records:
+        if r.tag != b"karT" or len(r.raw) != 93:
+            continue
+        if int.from_bytes(r.raw[8:12], "little") != KART_ARRANGE_TAG:
+            continue
+        if int.from_bytes(r.raw[0x2A:0x2E], "little") == channel:
+            return r
+    return None
+
+
 def patch_ivne_volume(raw: bytes, *, volume_linear: float, is_audio: bool) -> bytes | None:
-    """Patch ivnE display volume. Required alongside OCuA @0x98 for Logic fader UI."""
     if len(raw) <= IVNE_VOLUME_OFF + 3:
         return None
     b = bytearray(raw)
@@ -139,6 +169,27 @@ def patch_ivne_volume(raw: bytes, *, volume_linear: float, is_audio: bool) -> by
     if is_audio and len(raw) > IVNE_VOLUME_ACTIVE_OFF:
         b[IVNE_VOLUME_ACTIVE_OFF] = IVNE_VOLUME_ACTIVE_VAL
     return bytes(b)
+
+
+def patch_kart_mixer(
+    raw: bytes,
+    *,
+    volume_linear: float | None = None,
+    touch: bool = False,
+) -> bytes | None:
+    """Patch karT arrange row mixer display / touch flags."""
+    if len(raw) != 93:
+        return None
+    b = bytearray(raw)
+    changed = False
+    if volume_linear is not None:
+        _patch_float(b, KART_VOL_DISPLAY_OFF, linear_to_kart_volume_display(volume_linear))
+        changed = True
+    if touch or volume_linear is not None:
+        b[KART_TOUCH_OFF] = KART_TOUCH_VAL
+        b[KART_MIXER_TOUCH_OFF] = KART_MIXER_TOUCH_VAL
+        changed = True
+    return bytes(b) if changed else None
 
 
 def _mixer_needs_patch(track: Track) -> bool:
@@ -149,7 +200,7 @@ def _mixer_needs_patch(track: Track) -> bool:
 
 
 def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
-    """Write mixer fields into ProjectData OCuA strips (volume, pan, mute native)."""
+    """Write mixer fields into ProjectData (OCuA gain + karT fader display)."""
     pd_path = logicx_dir / "Alternatives" / "000" / "ProjectData"
     pd = ProjectData.parse(pd_path.read_bytes())
     ordinals = _counting_ordinals(project)
@@ -180,16 +231,27 @@ def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
             patch_kwargs["pan_normalized"] = track.pan
         if track.mute is True:
             patch_kwargs["mute"] = True
-        new_raw = patch_ocua_mixer(
-            oc.raw,
-            **patch_kwargs,
-        )
+        new_raw = patch_ocua_mixer(oc.raw, **patch_kwargs)
         if new_raw is None:
             report.warnings.append(
                 f"track '{track.name}': mixer patch skipped (unsupported strip type)"
             )
             continue
         oc.raw = new_raw
+
+        kart = _kart_arrange_for_channel(pd, ch)
+        if kart is not None:
+            kart_new = patch_kart_mixer(
+                kart.raw,
+                volume_linear=patch_kwargs.get("volume_linear"),
+                touch=bool(
+                    patch_kwargs.get("pan_normalized") is not None
+                    or patch_kwargs.get("mute")
+                ),
+            )
+            if kart_new is not None:
+                kart.raw = kart_new
+
         if "volume_linear" in patch_kwargs:
             iv = _ivne_for_channel(pd, ch)
             if iv is not None:
@@ -200,6 +262,7 @@ def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
                 )
                 if iv_new is not None:
                     iv.raw = iv_new
+
         patched += 1
         report.mixer_patched_tracks.add(track.name)
 

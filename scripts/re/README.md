@@ -9,8 +9,10 @@ Logic-validated on macOS (2026-06):
 | Volume | `float32 LE @0x98` | `stored = dB + 7.5590658` (0 dB → ~7.559, −6 dB → 1.559) |
 | Active flag | `@0x4e = 0x03` | Required or Logic ignores `@0x98` on load |
 | Vol gate | `@0x79 = 0x3f` | Unity default is `0x5a`; required for display |
-| ivnE display vol | `float32 LE @0x1a6` | `abs(attenuation_dB) / 391.012` — **required for fader UI** |
+| ivnE display vol | `float32 LE @0x1a6` | `abs(attenuation_dB) / 391.012` (companion field) |
 | ivnE vol active | `@0xcc = 0x04` | Audio channels when volume set (default `0x02`) |
+| **karT fader UI** | `float32 LE @0x48` | **`-attenuation_dB / 17`** (Logic reads this for display) |
+| karT mixer touch | `@0x26 = 0x14`, `@0x4f = 0x0c` | Set when volume/pan/mute edited |
 | Pan | `@0x7d` uint8 | `round(normalized * 127)` — center `64`, hard-left `-64` → `0` |
 | Mute | `@0x7e` | `0x01` muted, `0x00` unmuted |
 

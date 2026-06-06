@@ -58,7 +58,7 @@ The CLI prints a summary (tracks, regions, tempo) and lists warnings on stderr. 
 | Audio regions | Yes | Warp-aware slice + linear resample |
 | Track / region names | Yes | |
 | AU plugin presets | Sidecar | Copied to `Media/daw2logic Import/plugins/` |
-| Mixer volume / pan / mute | Native | OCuA `@0x98`/`@0x7d`/`@0x7e` + ivnE `@0x1a6` display vol |
+| Mixer volume / pan / mute | Native | OCuA gain + karT `@0x48` fader display + pan/mute bytes |
 | Automation | Sidecar | Per-track JSON under `Media/daw2logic Import/automation/` |
 | VST / CLAP plugins | Skipped | No Logic slot |
 | Clip fades | Warning only | Not in LogicProFormatWriter yet |

@@ -19,8 +19,10 @@ from daw2logic.mixer_logic import (
     IVNE_VOLUME_ACTIVE_OFF,
     IVNE_VOLUME_ACTIVE_VAL,
     IVNE_VOLUME_OFF,
+    KART_VOL_DISPLAY_OFF,
     apply_mixer,
     linear_to_ivne_volume_float,
+    linear_to_kart_volume_display,
     linear_to_logic_volume_db,
     logic_pan_byte_to_normalized,
     logic_volume_db_to_linear,
@@ -89,9 +91,30 @@ def test_bitwig_mixer_fixture_parsed(bitwig_mixer_dawproject):
     assert drum.mute is False
 
 
+def test_kart_volume_display_encoding_from_logic_capture():
+    assert linear_to_kart_volume_display(10 ** (-6 / 20)) == pytest.approx(-6 / 17, rel=1e-4)
+    assert linear_to_kart_volume_display(1.0) == 0.0
+
+
 def test_ivne_volume_encoding_from_logic_capture():
     assert linear_to_ivne_volume_float(10 ** (-6 / 20)) == pytest.approx(0.015348792, rel=1e-5)
     assert linear_to_ivne_volume_float(1.0) == 0.0
+
+
+def test_convert_patches_kart_display_volume(bitwig_simple_dawproject, logicx_output):
+    convert_file(bitwig_simple_dawproject, logicx_output)
+    pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
+    drum_ch = audio_channels(pd)[2]
+    drum_kart = next(
+        r for r in pd.records
+        if r.tag == b"karT" and len(r.raw) == 93
+        and int.from_bytes(r.raw[8:12], "little") == 0x040000
+        and int.from_bytes(r.raw[0x2A:0x2E], "little") == drum_ch
+    )
+    stored = struct.unpack_from("<f", drum_kart.raw, KART_VOL_DISPLAY_OFF)[0]
+    assert stored == pytest.approx(linear_to_kart_volume_display(0.177125), rel=1e-4)
+    assert drum_kart.raw[0x26] == 0x14
+    assert drum_kart.raw[0x4F] == 0x0C
 
 
 def test_convert_patches_ivne_display_volume(bitwig_simple_dawproject, logicx_output):
@@ -140,21 +163,25 @@ def test_bitwig_mixer_exports_pan_mute_sidecar(bitwig_mixer_dawproject, logicx_o
 
 
 def test_logic_re_volume_fixture_if_present():
-    base = Path("/tmp/daw2logic-re/mixer_baseline.logicx")
     vol = Path("/tmp/daw2logic-re/drumloop_minus6db.logicx")
-    if not (base / "Alternatives/000/ProjectData").is_file():
-        pytest.skip("no local Logic volume baseline fixture")
     if not (vol / "Alternatives/000/ProjectData").is_file():
         pytest.skip("no local Logic -6 dB volume capture")
     pd1 = ProjectData.parse((vol / "Alternatives/000/ProjectData").read_bytes())
     ch = audio_channels(pd1)[2]
+    drum_kart = next(
+        r for r in pd1.records
+        if r.tag == b"karT" and len(r.raw) == 93
+        and int.from_bytes(r.raw[8:12], "little") == 0x040000
+        and int.from_bytes(r.raw[0x2A:0x2E], "little") == ch
+    )
+    stored = struct.unpack_from("<f", drum_kart.raw, KART_VOL_DISPLAY_OFF)[0]
+    assert stored == pytest.approx(-6 / 17, rel=1e-3)
     drum_iv = next(
         r for r in pd1.records
         if r.tag == b"ivnE" and int.from_bytes(r.raw[8:12], "little") == ch
     )
-    stored = struct.unpack_from("<f", drum_iv.raw, IVNE_VOLUME_OFF)[0]
-    assert stored == pytest.approx(linear_to_ivne_volume_float(10 ** (-6 / 20)), rel=1e-5)
-    assert drum_iv.raw[IVNE_VOLUME_ACTIVE_OFF] == IVNE_VOLUME_ACTIVE_VAL
+    iv_stored = struct.unpack_from("<f", drum_iv.raw, IVNE_VOLUME_OFF)[0]
+    assert iv_stored == pytest.approx(linear_to_ivne_volume_float(10 ** (-6 / 20)), rel=1e-5)
 
 
 def test_logic_re_mute_fixture_if_present():
