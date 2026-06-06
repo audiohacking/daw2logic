@@ -38,6 +38,14 @@ OCUA_MUTE_OFF = 0x7E
 OCUA_MUTE_ON = 0x01
 OCUA_MUTE_OFF_VAL = 0x00
 
+# Logic-validated 2026-06 (drumloop_minus6db.logicx): fader display also reads ivnE:
+#   @0x1a6 float32 LE = abs(attenuation_dB) / IVNE_VOLUME_DB_SCALE  (-6 dB -> ~0.01535)
+#   @0xcc = 0x04 on audio channels when volume is set (default 0x02)
+IVNE_VOLUME_OFF = 0x1A6
+IVNE_VOLUME_ACTIVE_OFF = 0xCC
+IVNE_VOLUME_ACTIVE_VAL = 0x04
+IVNE_VOLUME_DB_SCALE = 6.0 / struct.unpack("<f", bytes.fromhex("80797b3c"))[0]
+
 
 def linear_to_logic_volume_db(linear: float) -> float:
     """DAWproject linear gain -> Logic OCuA float @0x98 (audio strips)."""
@@ -62,6 +70,17 @@ def normalized_to_logic_pan_byte(normalized: float) -> int:
 
 def logic_pan_byte_to_normalized(stored: int) -> float:
     return stored / 127.0
+
+
+def linear_to_ivne_volume_float(linear: float) -> float:
+    """DAWproject linear gain -> ivnE @0x1a6 (Logic fader display field)."""
+    if linear <= 0:
+        att_db = 100.0
+    else:
+        att_db = max(0.0, -20.0 * math.log10(linear))
+    if att_db < 1e-6:
+        return 0.0
+    return att_db / IVNE_VOLUME_DB_SCALE
 
 
 def _strip_cfg(raw: bytes) -> bytes | None:
@@ -100,6 +119,26 @@ def patch_ocua_mixer(raw: bytes, *, volume_linear: float | None = None,
         _patch_mute(b, OCUA_MUTE_OFF, mute)
         changed = True
     return bytes(b) if changed else None
+
+
+def _ivne_for_channel(pd: ProjectData, channel: int):
+    for r in pd.records:
+        if r.tag != b"ivnE" or len(r.raw) <= IVNE_VOLUME_OFF + 4:
+            continue
+        if int.from_bytes(r.raw[8:12], "little") == channel:
+            return r
+    return None
+
+
+def patch_ivne_volume(raw: bytes, *, volume_linear: float, is_audio: bool) -> bytes | None:
+    """Patch ivnE display volume. Required alongside OCuA @0x98 for Logic fader UI."""
+    if len(raw) <= IVNE_VOLUME_OFF + 3:
+        return None
+    b = bytearray(raw)
+    _patch_float(b, IVNE_VOLUME_OFF, linear_to_ivne_volume_float(volume_linear))
+    if is_audio and len(raw) > IVNE_VOLUME_ACTIVE_OFF:
+        b[IVNE_VOLUME_ACTIVE_OFF] = IVNE_VOLUME_ACTIVE_VAL
+    return bytes(b)
 
 
 def _mixer_needs_patch(track: Track) -> bool:
@@ -151,6 +190,16 @@ def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
             )
             continue
         oc.raw = new_raw
+        if "volume_linear" in patch_kwargs:
+            iv = _ivne_for_channel(pd, ch)
+            if iv is not None:
+                iv_new = patch_ivne_volume(
+                    iv.raw,
+                    volume_linear=patch_kwargs["volume_linear"],
+                    is_audio=not has_midi,
+                )
+                if iv_new is not None:
+                    iv.raw = iv_new
         patched += 1
         report.mixer_patched_tracks.add(track.name)
 
