@@ -304,8 +304,8 @@ def load(path: Path) -> Project:
         for has_midi, has_audio in types:
             if has_midi and aud_seen:
                 warnings.append(
-                    "interleaved instrument/audio track order may not match source "
-                    "(Logic groups instruments then audio)"
+                    "interleaved instrument/audio track order in source "
+                    "(reordered during Logic export when possible)"
                 )
                 break
             if has_midi:

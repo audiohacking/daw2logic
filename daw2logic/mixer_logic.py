@@ -9,6 +9,7 @@ from logicx.projectdata import OCUA_UUID, ProjectData, _ocua_for_channel
 
 from .ir import Project, Track
 from .logicx_channels import channel_for_track
+from .track_order import _counting_ordinals, logic_aud_ordinal, logic_inst_ordinal
 
 # Unverified until differential RE against Logic-made fixtures (see tools/ocua_mixer_re.py).
 OCUA_VOLUME_LINEAR_OFF: int | None = None
@@ -54,24 +55,6 @@ def patch_ocua_mixer(raw: bytes, *, volume_linear: float | None = None,
     return bytes(b) if changed else None
 
 
-def _track_ordinals(project: Project) -> dict[str, tuple[int | None, int | None, bool]]:
-    """track id -> (inst_ordinal, aud_ordinal, has_midi)."""
-    inst_n, aud_n = 0, 0
-    out: dict[str, tuple[int | None, int | None, bool]] = {}
-    for track in project.tracks:
-        has_midi = bool(track.midi_clips)
-        has_audio = bool(track.audio_clips)
-        inst_ord = aud_ord = None
-        if has_midi:
-            inst_n += 1
-            inst_ord = inst_n
-        if has_audio:
-            aud_n += 1
-            aud_ord = aud_n
-        out[track.id] = (inst_ord, aud_ord, has_midi)
-    return out
-
-
 def _mixer_needs_patch(track: Track) -> bool:
     vol = track.volume is not None and abs(track.volume - 1.0) >= 1e-6
     pan = track.pan is not None and abs(track.pan - 0.5) >= 1e-6
@@ -86,13 +69,17 @@ def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
 
     pd_path = logicx_dir / "Alternatives" / "000" / "ProjectData"
     pd = ProjectData.parse(pd_path.read_bytes())
-    ordinals = _track_ordinals(project)
+    ordinals = _counting_ordinals(project)
     patched = 0
 
     for track in project.tracks:
         if not _mixer_needs_patch(track):
             continue
         inst_ord, aud_ord, has_midi = ordinals[track.id]
+        if has_midi and inst_ord is not None:
+            inst_ord = logic_inst_ordinal(inst_ord)
+        elif aud_ord is not None:
+            aud_ord = logic_aud_ordinal(aud_ord)
         ch = channel_for_track(
             pd, has_midi=has_midi, inst_ordinal=inst_ord, aud_ordinal=aud_ord
         )

@@ -14,6 +14,7 @@ from .ir import Project
 from .time import PPQ, beats_to_note_tick, beats_to_tick, build_time_map, velocity_to_midi
 from .mixer_logic import apply_mixer
 from .plugins import export_sidecars
+from .track_order import apply_track_order, logic_aud_ordinal, logic_inst_ordinal
 from .transport_logic import apply_transport
 
 
@@ -108,7 +109,7 @@ def convert(project: Project, out: Path) -> ConversionReport:
             )
             tick = beats_to_tick(clip.start, time_map)
             region_name = clip.name or track.name
-            midi_regions.append((i, notes, tick, region_name))
+            midi_regions.append((logic_inst_ordinal(i), notes, tick, region_name))
             report.midi_regions += 1
             if clip.fade_in or clip.fade_out:
                 report.warnings.append(
@@ -123,7 +124,7 @@ def convert(project: Project, out: Path) -> ConversionReport:
             prepared, awarn = prepare_audio_clip(clip, source, work_dir, project.transport)
             report.warnings.extend(awarn)
             tick = beats_to_tick(clip.start, time_map)
-            audio_regions.append((i, prepared, tick))
+            audio_regions.append((logic_aud_ordinal(i), prepared, tick))
             audio_names.append(clip.name or track.name)
             report.audio_regions += 1
 
@@ -144,6 +145,7 @@ def convert(project: Project, out: Path) -> ConversionReport:
         report.warnings.extend(apply_transport(bundle, project.transport, project.markers))
         _patch_region_names(bundle, audio_names)
         _apply_title(bundle, project.metadata.title)
+        apply_track_order(bundle, project, report)
         apply_mixer(bundle, project, report)
         export_sidecars(bundle, project, report)
 

@@ -85,7 +85,10 @@ Tests are driven by demo fixtures built from the [Bitwig DAWproject example](thi
 |---------|----------|
 | `bitwig_simple.dawproject` | Bass MIDI + drumloop audio @ 149 BPM, mixer levels |
 | `bitwig_extended.dawproject` | Tempo map + markers |
+| `bitwig_interleaved.dawproject` | Same as simple but audio track before instrument |
 | `bitwig_au.dawproject` | AU plugin + volume automation (requires LogicFiles submodule) |
+
+Native AU embedding research: [`docs/AU_EMBEDDING.md`](docs/AU_EMBEDDING.md)
 
 Build fixtures: `python tests/fixtures/build_bitwig_simple.py`
 
@@ -102,9 +105,10 @@ bash scripts/macos/validate_au_sidecar.sh out.logicx
 
 Logic stores fader/pan/mute in 205-byte `OCuA` channel strips. Offsets are not yet decoded. To contribute a differential fixture:
 
-1. Convert a minimal project: `daw2logic tests/fixtures/bitwig_simple.dawproject -o re.logicx`
-2. Open in Logic Pro, change **only** one fader, save as `re_vol.logicx`
-3. Diff strips: `python tools/ocua_mixer_re.py re.logicx re_vol.logicx --channel 0x580000`
+1. Run `bash scripts/macos/capture_mixer_fixture.sh` (or convert manually, change one fader in Logic, save)
+2. Diff strips: `python tools/ocua_mixer_re.py re.logicx re_vol.logicx --channel 0x580000`
+
+Automated fader moves require Accessibility permission for Terminal/Cursor; the capture script uses a manual save step.
 
 See [`scripts/re/README.md`](scripts/re/README.md) and [`daw2logic/mixer_logic.py`](daw2logic/mixer_logic.py) for wiring discovered offsets into the converter.
 
@@ -115,6 +119,7 @@ See [`scripts/re/README.md`](scripts/re/README.md) and [`daw2logic/mixer_logic.p
   → parser / flatten → IR
   → logicx synthesize_av_region_bundle → .logicx
   → transport_logic (tempo / meter / markers)
+  → track_order (template ordinals + interleaved arrange reorder)
   → mixer_logic (OCuA patching when offsets known)
   → plugins.export_sidecars (AU / mixer / automation JSON)
 ```

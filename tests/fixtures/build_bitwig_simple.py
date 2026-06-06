@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import shutil
 import zipfile
 from pathlib import Path
 
@@ -23,12 +24,32 @@ def _write(name: str, src_dir: Path, *, extra: dict[str, Path] | None = None) ->
     return out
 
 
+def _ensure_interleaved_fixture() -> None:
+    src = FIXTURES / "bitwig_simple"
+    dst = FIXTURES / "bitwig_interleaved"
+    if dst.is_dir():
+        return
+    shutil.copytree(src, dst)
+    xml = (dst / "project.xml").read_text()
+    # Swap Bass and Drumloop track blocks so audio precedes instrument in Structure.
+    bass_start = xml.index('    <Track contentType="notes"')
+    drum_start = xml.index('    <Track contentType="audio"')
+    bass_end = xml.index('    </Track>\n', bass_start) + len('    </Track>\n')
+    drum_end = xml.index('    </Track>\n', drum_start) + len('    </Track>\n')
+    bass_block = xml[bass_start:bass_end]
+    drum_block = xml[drum_start:drum_end]
+    swapped = xml[:bass_start] + drum_block + bass_block + xml[drum_end:]
+    (dst / "project.xml").write_text(swapped)
+
+
 def build_all() -> list[Path]:
     if not WAV.is_file():
         raise SystemExit(f"missing audio fixture: {WAV} (init submodules)")
+    _ensure_interleaved_fixture()
     paths = [
         _write("bitwig_simple.dawproject", FIXTURES / "bitwig_simple"),
         _write("bitwig_extended.dawproject", FIXTURES / "bitwig_extended"),
+        _write("bitwig_interleaved.dawproject", FIXTURES / "bitwig_interleaved"),
     ]
     if AU_PRESET.is_file():
         paths.append(
