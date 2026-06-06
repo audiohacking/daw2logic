@@ -43,7 +43,8 @@ Imports tempo maps, meter maps, markers, MIDI notes, and audio regions (with
 warp-aware slice/resample). AU plugin presets, mixer levels, and automation
 curves are exported under `Media/daw2logic Import/` in the `.logicx` bundle.
 VST/CLAP plugins and native Logic channel-strip/plugin embedding require
-ProjectData writers not yet available (see `daw2logic/mixer.py`).
+ProjectData writers not yet available (see `daw2logic/mixer_logic.py` and
+`scripts/re/README.md` for OCuA mixer RE workflow).
 
 ### macOS: validate bundled AU presets
 
