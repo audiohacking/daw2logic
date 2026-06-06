@@ -6,9 +6,9 @@ from __future__ import annotations
 import pathlib
 import sys
 
-MARKER = "wasi static extension via _imp.create_builtin"
+CALLINTO_MARKER = "wasi static extension via PyInit_zlib"
 
-OLD = """#ifdef __wasi__
+CALLINTO_OLD = """#ifdef __wasi__
     const char *error = "dynamic libraries are not implemented in wasi";
     SET_CURRENT_EXCEPTION_TYPE0_STR(tstate, PyExc_ImportError, error);
     return NULL;
@@ -16,60 +16,62 @@ OLD = """#ifdef __wasi__
     entrypoint_t entrypoint = NULL;
 #else"""
 
-NEW = f"""#ifdef __wasi__
+CALLINTO_NEW = f"""#ifdef __wasi__
     if (isVerbose()) {{
-        PySys_WriteStderr("import %s # {MARKER}\\n", full_name);
+        PySys_WriteStderr("import %s # {CALLINTO_MARKER}\\n", full_name);
     }}
-
-    PyObject *imp_module = PyImport_ImportModule("_imp");
-    if (unlikely(imp_module == NULL)) {{
-        return NULL;
-    }}
-
-    PyObject *create_builtin = PyObject_GetAttrString(imp_module, "create_builtin");
-    Py_DECREF(imp_module);
-
-    if (unlikely(create_builtin == NULL)) {{
-        return NULL;
-    }}
-
-    PyObject *basename_obj = Nuitka_String_FromString(name);
-    PyObject *static_module = PyObject_CallFunctionObjArgs(create_builtin, basename_obj, NULL);
-    Py_DECREF(basename_obj);
-    Py_DECREF(create_builtin);
-
-    PGO_onModuleEntered(full_name);
-    PGO_onModuleExit(name, static_module == NULL);
-
-    if (unlikely(static_module == NULL)) {{
-        return NULL;
-    }}
-
-    {{
-        PyObject *full_name_obj = Nuitka_String_FromString(full_name);
-        Nuitka_SetModule(full_name_obj, static_module);
-        Py_DECREF(full_name_obj);
-    }}
-
-    return static_module;
 
     entrypoint_t entrypoint = NULL;
+    if (strcmp(entry_function_name, "PyInit_zlib") == 0) {{
+        extern PyObject *PyInit_zlib(void);
+        entrypoint = (entrypoint_t)PyInit_zlib;
+    }}
+
+    if (unlikely(entrypoint == NULL)) {{
+        SET_CURRENT_EXCEPTION_TYPE0_STR(tstate, PyExc_ImportError, "static extension not linked");
+        return NULL;
+    }}
 #else"""
+
+LEGACY_MARKERS = (
+    CALLINTO_MARKER,
+    "wasi static extension via dlsym",
+    "wasi loadModule create_builtin exec_builtin",
+    "wasi create_module create_builtin built-in",
+    "wasi exec_module exec_builtin",
+    "wasi find_spec skip extension modules",
+    "wasi find_spec delegate extension to BuiltinImporter",
+    "wasi loadModule create_builtin",
+    "wasi static extension via _imp.create_builtin",
+    "daw2logic zlib inittab",
+)
 
 
 def main() -> int:
     import nuitka
 
-    path = pathlib.Path(nuitka.__file__).parent / "build/static_src/MetaPathBasedLoader.c"
-    text = path.read_text()
-    if MARKER in text:
-        print(f"already patched: {path}")
+    loader_path = pathlib.Path(nuitka.__file__).parent / "build/static_src/MetaPathBasedLoader.c"
+    text = loader_path.read_text()
+
+    if CALLINTO_MARKER in text:
+        print(f"already patched: {loader_path}")
         return 0
-    if OLD not in text:
-        print(f"patch target not found in {path}", file=sys.stderr)
+
+    if any(m in text for m in LEGACY_MARKERS):
+        print(
+            "legacy WASI patch detected; reinstall py2wasm fork first:\n"
+            "  pip install --force-reinstall --no-deps "
+            "'py2wasm @ git+https://github.com/lum1n0us/Nuitka@dev/wasi_sync_upstream'",
+            file=sys.stderr,
+        )
         return 1
-    path.write_text(text.replace(OLD, NEW, 1))
-    print(f"patched: {path}")
+
+    if CALLINTO_OLD not in text:
+        print(f"callIntoExtensionModule patch target not found in {loader_path}", file=sys.stderr)
+        return 1
+
+    loader_path.write_text(text.replace(CALLINTO_OLD, CALLINTO_NEW, 1))
+    print(f"patched: {loader_path}")
     return 0
 
 

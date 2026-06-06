@@ -1,0 +1,91 @@
+From f9324731620be84904c30186c9ab6ef793e81a60 Mon Sep 17 00:00:00 2001
+From: Lorenzo Mangani <lorenzo.mangani@gmail.com>
+Date: Sat, 6 Jun 2026 20:31:11 +0200
+Subject: [PATCH] Load logicx donor seeds from mounted path on WASI.
+
+WASI cannot read Nuitka package-data via pkgutil; try LOGICX_DATA_DIR
+and /seeds before falling back to normal filesystem paths.
+
+Co-authored-by: Cursor <cursoragent@cursor.com>
+---
+ logicx/projectdata.py | 50 ++++++++++++++++++++++++++++++++++++-------
+ 1 file changed, 42 insertions(+), 8 deletions(-)
+
+diff --git a/logicx/projectdata.py b/logicx/projectdata.py
+index 63f9aa1..95e8347 100644
+--- a/logicx/projectdata.py
++++ b/logicx/projectdata.py
+@@ -1766,6 +1766,46 @@ import functools as _functools
+ _SEED_DIR = Path(__file__).resolve().parent / "data"
+ 
+ 
++def _read_data_file(name: str) -> bytes:
++    """Read a file from logicx/data/ on disk or via pkgutil (Nuitka/WASM)."""
++    candidates: list[Path] = []
++    data_dir = os.environ.get("LOGICX_DATA_DIR")
++    if data_dir:
++        candidates.append(Path(data_dir) / name)
++    candidates.append(_SEED_DIR / name)
++    if sys.platform == "wasi":
++        candidates.extend(
++            (
++                Path("/seeds") / name,
++                Path("seeds") / name,
++            )
++        )
++    else:
++        candidates.extend(
++            (
++                Path("logicx/data") / name,
++                Path("./logicx/data") / name,
++            )
++        )
++    for candidate in candidates:
++        try:
++            return candidate.read_bytes()
++        except OSError:
++            continue
++    if sys.platform == "wasi":
++        raise FileNotFoundError(
++            f"missing donor seed {name!r} — mount logicx/data at LOGICX_DATA_DIR or /seeds"
++        )
++    import pkgutil
++
++    blob = pkgutil.get_data("logicx", f"data/{name}")
++    if blob is None:
++        raise FileNotFoundError(
++            f"missing donor seed data/{name} — run `python3.12 bake_seeds.py` (see DONORS.md)"
++        )
++    return blob
++
++
+ def _unpack_seed(blob: bytes) -> dict:
+     """Unpack a baked seed → {relative_path: bytes} (mirror of bake_seeds.pack_seed)."""
+     import gzip
+@@ -1781,10 +1821,7 @@ def _unpack_seed(blob: bytes) -> dict:
+ 
+ @_functools.lru_cache(maxsize=None)
+ def _seed_files(name: str) -> dict:
+-    p = _SEED_DIR / f"{name}.seed"
+-    if not p.exists():
+-        raise FileNotFoundError(f"missing donor seed {p} — run `python3.12 bake_seeds.py` (see DONORS.md)")
+-    return _unpack_seed(p.read_bytes())
++    return _unpack_seed(_read_data_file(f"{name}.seed"))
+ 
+ 
+ def _seed_base_pd(name: str) -> "ProjectData":
+@@ -1811,10 +1848,7 @@ def _baked_infra() -> dict:
+     deserialized from data/infra.json.gz. Tags in (tag,bytes) pairs come back as bytes."""
+     import gzip
+     import json
+-    p = _SEED_DIR / "infra.json.gz"
+-    if not p.exists():
+-        raise FileNotFoundError(f"missing {p} — run `python3.12 bake_seeds.py` (see DONORS.md)")
+-    raw = _infra_dec(json.loads(gzip.decompress(p.read_bytes()).decode("utf-8")))
++    raw = _infra_dec(json.loads(gzip.decompress(_read_data_file("infra.json.gz")).decode("utf-8")))
+ 
+     def _retag(group):                                       # restore (b"tag", bytes) pairs
+         return [(t.encode("latin-1") if isinstance(t, str) else t, d) for t, d in group]
+-- 
+2.39.5 (Apple Git-154)
+

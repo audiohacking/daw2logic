@@ -12,8 +12,12 @@
 
 from __future__ import annotations
 
+import os
 import sys
 import zlib  # noqa: F401 — Nuitka anti-bloat omits zlib unless forced; zipfile needs it
+
+# WASI has no real package-data filesystem; seeds are mounted at /seeds (see build_wasm.sh).
+os.environ.setdefault("LOGICX_DATA_DIR", "/seeds")
 
 from daw2logic.wasm_api import convert_dawproject_bytes, pack_conversion_result
 

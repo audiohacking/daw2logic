@@ -44,7 +44,7 @@ jobs:
 
       - name: Smoke test WASM module
         run: |
-          wasmer run web/wasm/daw2logic.wasm < tests/fixtures/bitwig_simple.dawproject > /tmp/out.bin
+          wasmer run --volume "$(pwd)/web/wasm/logicx/data:/seeds" web/wasm/daw2logic.wasm < tests/fixtures/bitwig_simple.dawproject > /tmp/out.bin
           python3 - <<'PY'
           import struct, zipfile, io
           raw = open("/tmp/out.bin", "rb").read()
