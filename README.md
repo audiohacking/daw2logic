@@ -12,21 +12,35 @@ The converter is a portable Python CLI (Linux and macOS). It uses [LogicProForma
 
 ## Quick start
 
+Use pre-built executables for **Linux x86_64** or **macOS arm64**.
+
+### **macOS (Apple Silicon)**
+
+```bash
+curl -fsSL -o daw2logic \
+  https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-macos-arm64
+chmod +x daw2logic
+xattr -dr com.apple.quarantine daw2logic 2>/dev/null || true
+./daw2logic song.dawproject -o song.logicx
+```
+
+### **Linux**
+
+```bash
+curl -fsSL -o daw2logic \
+  https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-linux-x86_64
+chmod +x daw2logic
+./daw2logic song.dawproject -o song.logicx
+```
+
+## Local Build
+
+Build locally: `bash scripts/build_cli.sh` (requires Python 3.11+ and PyInstaller; output under `dist/`).
+
 ```bash
 git clone https://github.com/audiohacking/daw2logic.git
 cd daw2logic
 bash scripts/setup_dev.sh   # submodules, editable installs, demo fixtures
-pytest
-```
-
-Or step by step:
-
-```bash
-git submodule update --init --recursive
-python3 -m venv .venv && source .venv/bin/activate
-pip install -e third_party/LogicProFormatWriter
-pip install -e ".[dev]"
-python tests/fixtures/build_bitwig_simple.py
 pytest
 ```
 
@@ -74,30 +88,6 @@ A WebAssembly build runs in the browser — drop a `.dawproject` file, get a `.l
 
 After conversion, open the `.logicx` bundle in Logic Pro to verify playback. AU presets, EQ, and colors in sidecars must be applied manually until native embedding is fully validated.
 
-## Standalone binary (releases)
-
-Pre-built executables for **Linux x86_64** and **macOS arm64** are attached to each [GitHub release](https://github.com/audiohacking/daw2logic/releases). No Python install required.
-
-**Linux**
-
-```bash
-curl -fsSL -o daw2logic \
-  https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-linux-x86_64
-chmod +x daw2logic
-./daw2logic song.dawproject -o song.logicx
-```
-
-**macOS (Apple Silicon)**
-
-```bash
-curl -fsSL -o daw2logic \
-  https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-macos-arm64
-chmod +x daw2logic
-xattr -dr com.apple.quarantine daw2logic 2>/dev/null || true
-./daw2logic song.dawproject -o song.logicx
-```
-
-Build locally: `bash scripts/build_cli.sh` (requires Python 3.11+ and PyInstaller; output under `dist/`).
 
 ## Sidecar layout
 
