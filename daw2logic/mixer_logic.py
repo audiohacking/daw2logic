@@ -12,15 +12,19 @@ from .ir import Project, Track
 from .logicx_channels import channel_for_track
 from .track_order import _counting_ordinals, logic_aud_ordinal, logic_inst_ordinal
 
-# Logic-validated 2026-06 (re_vol.logicx: -6 dB on an audio strip -> float 1.559 @0x98).
-# Encoding: float32 LE stored = dB + OCUA_VOLUME_DB_OFFSET  (0 dB -> ~7.559, -6 dB -> 1.559).
+# Logic-validated 2026-06 (drumloop_minus6db.logicx). Audio strip volume:
+#   @0x98 float32 LE = dB + OCUA_VOLUME_DB_OFFSET  (0 dB -> ~7.559, -6 dB -> 1.559)
+# Logic ignores @0x98 unless the strip is marked active:
+#   @0x4e = 0x03  (required on save / for load)
+#   @0x79 = 0x3f  (audio strips only, 0xabf7 @0x70)
 OCUA_AUDIO_VOLUME_DB_OFF = 0x98
 OCUA_VOLUME_DB_OFFSET = 7.5590658
 OCUA_AUDIO_CFG = b"\xab\xf7"
 OCUA_INST_CFG = b"\x29\xf5"
-
-# @0x4e 00->03 on save across all strips — touch/session flag, NOT fader level.
-OCUA_TOUCH_FLAG_OFF = 0x4e
+OCUA_ACTIVE_FLAG_OFF = 0x4e
+OCUA_ACTIVE_FLAG_VAL = 0x03
+OCUA_AUDIO_VOL_GATE_OFF = 0x79
+OCUA_AUDIO_VOL_GATE_VAL = 0x3F
 
 OCUA_PAN_OFF: int | None = None
 OCUA_MUTE_OFF: int | None = None
@@ -65,6 +69,8 @@ def patch_ocua_mixer(raw: bytes, *, volume_linear: float | None = None,
     b = bytearray(raw)
     changed = False
     if volume_linear is not None and _is_audio_strip(raw):
+        b[OCUA_ACTIVE_FLAG_OFF] = OCUA_ACTIVE_FLAG_VAL
+        b[OCUA_AUDIO_VOL_GATE_OFF] = OCUA_AUDIO_VOL_GATE_VAL
         _patch_float(b, OCUA_AUDIO_VOLUME_DB_OFF, linear_to_logic_volume_db(volume_linear))
         changed = True
     if pan_normalized is not None and OCUA_PAN_OFF is not None:

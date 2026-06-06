@@ -7,7 +7,8 @@ Logic-validated on macOS (2026-06):
 | Field | Audio strip (`0xabf7` @0x70) | Notes |
 |-------|------------------------------|-------|
 | Volume | `float32 LE @0x98` | `stored = dB + 7.5590658` (0 dB → ~7.559, −6 dB → 1.559) |
-| Touch flag | `@0x4e` | Changes `00→03` on save for all strips — **not** fader level |
+| Active flag | `@0x4e = 0x03` | Required or Logic ignores `@0x98` on load |
+| Audio vol gate | `@0x79 = 0x3f` | Required on audio strips (`0xabf7` @0x70) |
 | Instrument volume | TBD | `0x29f5` strips (e.g. Bass) — still sidecar-only |
 
 Implemented in `daw2logic/mixer_logic.py`.
