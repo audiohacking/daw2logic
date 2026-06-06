@@ -9,6 +9,7 @@ Logic-validated on macOS (2026-06):
 | Volume | `float32 LE @0x98` | `stored = dB + 7.5590658` (0 dB → ~7.559, −6 dB → 1.559) |
 | Active flag | `@0x4e = 0x03` | Required or Logic ignores `@0x98` on load |
 | Vol gate | `@0x79 = 0x3f` | Unity default is `0x5a`; required for display |
+| Pan | `@0x7d` uint8 | `round(normalized * 127)` — center `64`, hard-left `-64` → `0` |
 
 Implemented in `daw2logic/mixer_logic.py`.
 

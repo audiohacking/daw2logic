@@ -29,7 +29,9 @@ OCUA_AUDIO_VOLUME_DB_OFF = OCUA_VOLUME_DB_OFF  # alias
 OCUA_AUDIO_VOL_GATE_OFF = OCUA_VOL_GATE_OFF
 OCUA_AUDIO_VOL_GATE_VAL = OCUA_VOL_GATE_VAL
 
-OCUA_PAN_OFF: int | None = None
+# Logic-validated 2026-06 (drumloop_pan_left.logicx, hard-left -64):
+#   @0x7d uint8 = round(normalized_pan * 127)  (0.0 -> 0, 0.5 -> 64, 1.0 -> 127)
+OCUA_PAN_OFF = 0x7D
 OCUA_MUTE_OFF: int | None = None
 
 
@@ -47,6 +49,15 @@ def logic_volume_db_to_linear(stored: float) -> float:
     if db <= -100.0:
         return 0.0
     return 10.0 ** (db / 20.0)
+
+
+def normalized_to_logic_pan_byte(normalized: float) -> int:
+    """DAWproject pan 0..1 -> Logic OCuA @0x7d (center 64, hard-left 0)."""
+    return max(0, min(127, round(float(normalized) * 127)))
+
+
+def logic_pan_byte_to_normalized(stored: int) -> float:
+    return stored / 127.0
 
 
 def _strip_cfg(raw: bytes) -> bytes | None:
@@ -81,8 +92,8 @@ def patch_ocua_mixer(raw: bytes, *, volume_linear: float | None = None,
         b[OCUA_VOL_GATE_OFF] = OCUA_VOL_GATE_VAL
         _patch_float(b, OCUA_VOLUME_DB_OFF, linear_to_logic_volume_db(volume_linear))
         changed = True
-    if pan_normalized is not None and OCUA_PAN_OFF is not None:
-        _patch_float(b, OCUA_PAN_OFF, pan_normalized)
+    if pan_normalized is not None and OCUA_PAN_OFF is not None and _strip_cfg(raw) is not None:
+        b[OCUA_PAN_OFF] = normalized_to_logic_pan_byte(pan_normalized)
         changed = True
     if mute is not None and OCUA_MUTE_OFF is not None:
         changed |= _patch_mute(b, OCUA_MUTE_OFF, mute)
@@ -97,7 +108,7 @@ def _mixer_needs_patch(track: Track) -> bool:
 
 
 def apply_mixer(logicx_dir: Path, project: Project, report) -> None:
-    """Write mixer fields into ProjectData OCuA strips (volume native on inst + audio)."""
+    """Write mixer fields into ProjectData OCuA strips (volume + pan native on inst + audio)."""
     pd_path = logicx_dir / "Alternatives" / "000" / "ProjectData"
     pd = ProjectData.parse(pd_path.read_bytes())
     ordinals = _counting_ordinals(project)

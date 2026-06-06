@@ -11,11 +11,14 @@ from daw2logic.convert import convert_file
 from daw2logic.logicx_channels import audio_channels, instrument_channels
 from daw2logic.mixer_logic import (
     OCUA_AUDIO_VOLUME_DB_OFF,
+    OCUA_PAN_OFF,
     OCUA_VOL_GATE_OFF,
     OCUA_VOLUME_DB_OFFSET,
     apply_mixer,
     linear_to_logic_volume_db,
+    logic_pan_byte_to_normalized,
     logic_volume_db_to_linear,
+    normalized_to_logic_pan_byte,
     patch_ocua_mixer,
 )
 from logicx.projectdata import ProjectData, _ocua_for_channel
@@ -80,11 +83,25 @@ def test_bitwig_mixer_fixture_parsed(bitwig_mixer_dawproject):
     assert drum.mute is False
 
 
+def test_pan_byte_encoding_from_logic_capture():
+    assert normalized_to_logic_pan_byte(0.0) == 0
+    assert normalized_to_logic_pan_byte(0.5) == 64
+    assert normalized_to_logic_pan_byte(1.0) == 127
+    assert logic_pan_byte_to_normalized(0) == pytest.approx(0.0)
+    assert logic_pan_byte_to_normalized(64) == pytest.approx(64 / 127)
+
+
 def test_bitwig_mixer_exports_pan_mute_sidecar(bitwig_mixer_dawproject, logicx_output):
     import json
 
     report = convert_file(bitwig_mixer_dawproject, logicx_output)
-    assert "Bass" in report.mixer_patched_tracks  # volume native
+    assert "Bass" in report.mixer_patched_tracks
+    assert "Drumloop" in report.mixer_patched_tracks
+    pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
+    drum_raw = _ocua_for_channel(pd, audio_channels(pd)[2]).raw
+    bass_raw = _ocua_for_channel(pd, instrument_channels(pd)[2]).raw
+    assert drum_raw[OCUA_PAN_OFF] == normalized_to_logic_pan_byte(0.75)
+    assert bass_raw[OCUA_PAN_OFF] == normalized_to_logic_pan_byte(0.25)
     manifest = json.loads(
         (logicx_output / "Media/daw2logic Import/manifest.json").read_text()
     )
@@ -93,6 +110,22 @@ def test_bitwig_mixer_exports_pan_mute_sidecar(bitwig_mixer_dawproject, logicx_o
     assert bass["mixer"]["mute"] is True
     assert bass["mixer"]["pan_normalized"] == pytest.approx(0.25)
     assert drum["mixer"]["pan_normalized"] == pytest.approx(0.75)
+
+
+def test_logic_re_pan_fixture_if_present():
+    base = Path("/tmp/daw2logic-re/mixer_baseline.logicx")
+    pan = Path("/tmp/daw2logic-re/drumloop_pan_left.logicx")
+    if not (base / "Alternatives/000/ProjectData").is_file():
+        pytest.skip("no local Logic pan baseline fixture")
+    if not (pan / "Alternatives/000/ProjectData").is_file():
+        pytest.skip("no local Logic pan capture")
+    pd0 = ProjectData.parse((base / "Alternatives/000/ProjectData").read_bytes())
+    pd1 = ProjectData.parse((pan / "Alternatives/000/ProjectData").read_bytes())
+    ch = audio_channels(pd0)[2]
+    b0 = _ocua_for_channel(pd0, ch).raw[OCUA_PAN_OFF]
+    b1 = _ocua_for_channel(pd1, ch).raw[OCUA_PAN_OFF]
+    assert b0 == normalized_to_logic_pan_byte(0.5)
+    assert b1 == normalized_to_logic_pan_byte(0.0)
 
 
 def test_logic_re_fixture_if_present():
