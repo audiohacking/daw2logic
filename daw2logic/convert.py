@@ -11,7 +11,7 @@ from pathlib import Path
 from logicx.projectdata import ProjectData, synthesize_av_region_bundle
 
 from . import parser
-from .audio import prepare_audio_clip
+from .audio import resolve_audio_clip
 from .ir import Project
 from .time import PPQ, beats_to_note_tick, beats_to_tick, build_time_map, velocity_to_midi
 from .mixer_logic import apply_mixer
@@ -182,7 +182,6 @@ def convert(project: Project, out: Path, *, force: bool = False) -> ConversionRe
         raise ValueError("project has no MIDI or audio clips to convert")
 
     work_dir = project.extract_dir / "prepared"
-    work_dir.mkdir(exist_ok=True)
 
     midi_regions: list[tuple] = []
     for i, track in enumerate(inst_tracks, start=1):
@@ -210,7 +209,7 @@ def convert(project: Project, out: Path, *, force: bool = False) -> ConversionRe
     for i, track in enumerate(aud_tracks, start=1):
         for clip in track.audio_clips:
             source = _resolve_audio(clip.path, project)
-            prepared, awarn = prepare_audio_clip(clip, source, work_dir, project.transport)
+            prepared, awarn = resolve_audio_clip(clip, source, work_dir, project.transport)
             report.warnings.extend(awarn)
             tick = beats_to_tick(clip.start, time_map)
             audio_regions.append((logic_aud_ordinal(i), prepared, tick))

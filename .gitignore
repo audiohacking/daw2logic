@@ -15,3 +15,5 @@ venv/
 .venv-wasm/
 tmp/
 web/wasm/*.wasm
+web/wasm/logicx/
+nuitka-crash-report.xml

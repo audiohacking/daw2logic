@@ -60,7 +60,7 @@ A WebAssembly build runs in the browser — drop a `.dawproject` file, get a `.l
 | Meter maps | Yes | |
 | Markers | Yes | |
 | MIDI notes + clip names | Yes | Instrument tracks |
-| Audio regions | Yes | Warp-aware slice + linear resample |
+| Audio regions | Yes | Original WAVs copied; time-stretch baked only when DAWproject declares warp/stretch |
 | Track / region names | Yes | Reuses mixed-base template Inst 1 / Audio 1 slots |
 | Track order | Yes | Interleaved DAWproject order preserved in arrange window |
 | AU plugin presets | Sidecar | Copied to `Media/daw2logic Import/plugins/` |
@@ -70,6 +70,7 @@ A WebAssembly build runs in the browser — drop a `.dawproject` file, get a `.l
 | Automation | Sidecar | Per-track JSON under `Media/daw2logic Import/automation/` |
 | VST / CLAP plugins | Skipped | No Logic slot |
 | Clip fades | Warning only | Not in LogicProFormatWriter yet |
+| Audio warp / trim | Warning or resample | Original file preserved unless stretch algorithm needs baking |
 
 After conversion, open the `.logicx` bundle in Logic Pro to verify playback. AU presets, EQ, and colors in sidecars must be applied manually until native embedding is fully validated.
 

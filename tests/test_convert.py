@@ -43,13 +43,68 @@ def test_convert_bitwig_simple_produces_logicx_bundle(
     assert not any("clip duration/warp not applied" in w for w in report.warnings)
 
 
-def test_convert_trims_audio_region(bitwig_simple_dawproject, logicx_output):
+def test_convert_processes_stretched_audio(bitwig_simple_dawproject, logicx_output):
     convert_file(bitwig_simple_dawproject, logicx_output)
     region_frames = _audio_region_frames(logicx_output)[0]
     src = Path("third_party/dawproject/test-data/white-glasses.wav")
     with wave.open(str(src), "rb") as wf:
         source_frames = wf.getnframes()
     assert region_frames < source_frames
+
+
+def test_convert_keeps_full_source_without_stretch(tmp_path):
+    import zipfile
+
+    wav_path = Path("third_party/dawproject/test-data/white-glasses.wav")
+    if not wav_path.is_file():
+        pytest.skip("dawproject submodule wav missing")
+
+    project_xml = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project version="1.0">
+  <Transport>
+    <Tempo unit="bpm" value="120.000000" id="id0" name="Tempo"/>
+    <TimeSignature denominator="4" numerator="4" id="id1"/>
+  </Transport>
+  <Structure>
+    <Track contentType="audio" loaded="true" id="id2" name="Drums">
+      <Channel audioChannels="2" destination="id4" role="regular" id="id3"/>
+    </Track>
+    <Track contentType="audio notes" loaded="true" id="id5" name="Master">
+      <Channel audioChannels="2" role="master" id="id4"/>
+    </Track>
+  </Structure>
+  <Arrangement>
+    <Lanes timeUnit="beats">
+      <Lanes track="id2">
+        <Clips>
+          <Clip time="0.0" duration="4.0" playStart="0.0" name="Loop">
+            <Warps contentTimeUnit="seconds" timeUnit="beats">
+              <Audio algorithm="none" channels="2" sampleRate="48000">
+                <File path="audio/white-glasses.wav"/>
+              </Audio>
+              <Warp time="0.0" contentTime="0.0"/>
+              <Warp time="4.0" contentTime="4.0"/>
+            </Warps>
+          </Clip>
+        </Clips>
+      </Lanes>
+    </Lanes>
+  </Arrangement>
+</Project>"""
+    metadata = """<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<MetaData><Title>Plain audio</Title></MetaData>"""
+    daw = tmp_path / "plain.dawproject"
+    with zipfile.ZipFile(daw, "w") as zf:
+        zf.writestr("metadata.xml", metadata)
+        zf.writestr("project.xml", project_xml)
+        zf.write(wav_path, "audio/white-glasses.wav")
+
+    out = tmp_path / "out.logicx"
+    report = convert_file(daw, out)
+    with wave.open(str(wav_path), "rb") as wf:
+        source_frames = wf.getnframes()
+    assert _audio_region_frames(out)[0] == source_frames
+    assert not any("time-stretch" in w for w in report.warnings)
 
 
 def test_convert_sets_tempo_in_metadata(bitwig_simple_dawproject, logicx_output):

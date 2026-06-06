@@ -7,7 +7,12 @@ import wave
 
 import pytest
 
-from daw2logic.audio import content_range_seconds, prepare_audio_clip
+from daw2logic.audio import (
+    content_range_seconds,
+    needs_audio_processing,
+    prepare_audio_clip,
+    resolve_audio_clip,
+)
 from daw2logic.flatten import clips_from_lanes
 from daw2logic.ir import AudioClip, Transport, WarpPoint
 import xml.etree.ElementTree as ET
@@ -97,10 +102,70 @@ def test_prepare_audio_clip_slices_seconds_not_whole_file(tmp_path):
         path="tone.wav",
         play_start=4.0,
         warps=(WarpPoint(0.0, 0.0), WarpPoint(8.0, 8.0)),
-        algorithm="none",
+        algorithm="stretch_subbands",
     )
     transport = Transport(tempo=120.0, numerator=4, denominator=4)
     out, warnings = prepare_audio_clip(clip, src, tmp_path / "out", transport)
     with wave.open(str(out), "rb") as wf:
         assert wf.getnframes() == pytest.approx(rate, rel=0.02)
-    assert not any("8922275" in w for w in warnings)
+    assert any("time-stretch" in w for w in warnings)
+
+
+def test_resolve_audio_clip_preserves_original_without_stretch(tmp_path):
+    src = tmp_path / "tone.wav"
+    rate = 48000
+    frames = b"\x00\x00" * rate
+    with wave.open(str(src), "wb") as wf:
+        wf.setnchannels(1)
+        wf.setsampwidth(2)
+        wf.setframerate(rate)
+        wf.writeframes(frames * 10)
+
+    clip = AudioClip(
+        start=0.0,
+        duration=2.0,
+        path="tone.wav",
+        play_start=4.0,
+        warps=(WarpPoint(0.0, 0.0), WarpPoint(8.0, 8.0)),
+        algorithm="none",
+    )
+    transport = Transport(tempo=120.0, numerator=4, denominator=4)
+    assert not needs_audio_processing(clip, transport, src)
+    out, warnings = resolve_audio_clip(clip, src, tmp_path / "out", transport)
+    assert out == src
+    assert any("original file preserved" in w for w in warnings)
+
+
+def _write_24bit_wav(path, rate: int, channels: int, nframes: int) -> None:
+    """Write a short stereo 24-bit WAV for resampling tests."""
+    frame = b"".join(
+        int(v).to_bytes(3, "little", signed=True)
+        for v in (1000, -1000)[:channels]
+    )
+    with wave.open(str(path), "wb") as wf:
+        wf.setnchannels(channels)
+        wf.setsampwidth(3)
+        wf.setframerate(rate)
+        wf.writeframes(frame * nframes)
+
+
+def test_prepare_audio_clip_resamples_24_bit(tmp_path):
+    src = tmp_path / "tone24.wav"
+    rate = 44100
+    nframes = rate * 6
+    _write_24bit_wav(src, rate, 2, nframes)
+
+    clip = AudioClip(
+        start=0.0,
+        duration=8.0,
+        path="tone24.wav",
+        play_start=0.0,
+        warps=(WarpPoint(0.0, 0.0), WarpPoint(8.0, 6.0)),
+        algorithm="stretch_subbands",
+    )
+    transport = Transport(tempo=110.0, numerator=4, denominator=4)
+    out, warnings = prepare_audio_clip(clip, src, tmp_path / "out", transport)
+    with wave.open(str(out), "rb") as wf:
+        assert wf.getsampwidth() == 3
+        assert wf.getnframes() == pytest.approx(int(round(8 * 60 / 110 * rate)), rel=0.02)
+    assert any("time-stretch" in w for w in warnings)
