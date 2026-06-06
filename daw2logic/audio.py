@@ -15,10 +15,25 @@ def _read_wav_info(path: Path) -> tuple[int, int, int, int]:
         return wf.getnframes(), wf.getframerate(), wf.getnchannels(), wf.getsampwidth()
 
 
-def _content_range(clip: AudioClip) -> tuple[float, float]:
+def _interp_warp(timeline_t: float, warps: tuple) -> float:
+    pts = sorted(warps, key=lambda w: w.time)
+    if timeline_t <= pts[0].time:
+        return pts[0].content_time
+    for w0, w1 in zip(pts, pts[1:]):
+        if w0.time <= timeline_t <= w1.time:
+            if w1.time == w0.time:
+                return w0.content_time
+            frac = (timeline_t - w0.time) / (w1.time - w0.time)
+            return w0.content_time + frac * (w1.content_time - w0.content_time)
+    return pts[-1].content_time
+
+
+def content_range_seconds(clip: AudioClip) -> tuple[float, float]:
+    """Map clip playStart..playStart+duration through warp markers to source seconds."""
     if clip.warps:
-        content_times = [w.content_time for w in clip.warps]
-        return min(content_times), max(content_times)
+        t0 = clip.play_start
+        t1 = clip.play_start + clip.duration
+        return _interp_warp(t0, clip.warps), _interp_warp(t1, clip.warps)
     return clip.play_start, clip.play_start + clip.duration
 
 
@@ -66,7 +81,7 @@ def prepare_audio_clip(
     warnings: list[str] = []
     total_frames, rate, channels, sampwidth = _read_wav_info(source)
 
-    content_start, content_end = _content_range(clip)
+    content_start, content_end = content_range_seconds(clip)
     start_frame = max(0, int(round(content_start * rate)))
     end_frame = min(total_frames, int(round(content_end * rate)))
     if end_frame <= start_frame:
@@ -105,6 +120,9 @@ def prepare_audio_clip(
         )
 
     stem = Path(clip.path).stem
-    out = work_dir / f"{stem}_{int(clip.start * 1000)}.wav"
+    out = work_dir / (
+        f"{stem}_{int(clip.start * 1000)}_{int(clip.play_start * 1000)}"
+        f"_{int(content_start * 1000)}.wav"
+    )
     _write_wav(out, raw, rate, channels, sampwidth)
     return out, warnings

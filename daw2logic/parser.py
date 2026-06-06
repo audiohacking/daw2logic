@@ -8,6 +8,7 @@ import xml.etree.ElementTree as ET
 import zipfile
 from pathlib import Path
 
+from .eq import parse_equalizer
 from .flatten import clips_from_lanes
 from .ir import (
     Marker,
@@ -80,6 +81,13 @@ def _parse_plugins(channel: ET.Element, extract_dir: Path) -> tuple[PluginInfo, 
                 )
             )
     return tuple(plugins)
+
+
+def _parse_equalizers(channel: ET.Element):
+    devices = channel.find("Devices")
+    if devices is None:
+        return ()
+    return tuple(parse_equalizer(el) for el in devices.findall("Equalizer"))
 
 
 def _channel_param_names(channel: ET.Element) -> dict[str, str]:
@@ -276,6 +284,7 @@ def load(path: Path) -> Project:
             automation = _parse_lane_automation(lane, _channel_param_names(channel))
 
         plugins = _parse_plugins(channel, extract_dir)
+        equalizers = _parse_equalizers(channel)
         warnings.extend(_warn_plugins(track_el.get("name", tid), plugins))
 
         vol, pan = _real_param(channel, "Volume"), _real_param(channel, "Pan")
@@ -292,6 +301,7 @@ def load(path: Path) -> Project:
                 mute=_bool_param(channel, "Mute"),
                 solo=channel.get("solo", "").lower() == "true",
                 plugins=plugins,
+                equalizers=equalizers,
                 automation=automation,
                 midi_clips=midi_clips,
                 audio_clips=audio_clips,

@@ -7,7 +7,7 @@ import json
 import sys
 from pathlib import Path
 
-from .convert import convert_file
+from .convert import convert_file, write_conversion_notes
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -26,26 +26,23 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--report",
         type=Path,
-        help="optional JSON file listing conversion warnings and stats",
+        help="optional JSON report path (default: notes written beside output as .txt)",
+    )
+    parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="overwrite an existing output .logicx bundle",
     )
     args = parser.parse_args(argv)
 
     try:
-        report = convert_file(args.input, args.output)
+        report = convert_file(args.input, args.output, force=args.force)
     except (FileNotFoundError, ValueError, FileExistsError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
 
-    print(f"wrote {args.output}")
-    print(
-        f"  {report.instrument_tracks} instrument track(s), "
-        f"{report.audio_tracks} audio track(s), "
-        f"{report.midi_regions} MIDI region(s), "
-        f"{report.audio_regions} audio region(s), "
-        f"{report.tempo} BPM"
-    )
-    for warning in report.warnings:
-        print(f"  warning: {warning}", file=sys.stderr)
+    write_conversion_notes(report, source=args.input, output=args.output)
 
     if args.report:
         payload = {
@@ -59,6 +56,8 @@ def main(argv: list[str] | None = None) -> int:
             "plugins_copied": report.plugins_copied,
             "tempo": report.tempo,
             "title": report.title,
+            "mixer_patched_tracks": sorted(report.mixer_patched_tracks),
+            "color_patched_tracks": sorted(report.color_patched_tracks),
         }
         args.report.write_text(json.dumps(payload, indent=2) + "\n")
 

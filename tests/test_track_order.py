@@ -49,6 +49,8 @@ def _placement_tracks(logicx: Path) -> dict[str, int]:
 def test_regions_target_synthesized_tracks(bitwig_simple_dawproject, logicx_output):
     convert_file(bitwig_simple_dawproject, logicx_output)
     names = _arrange_names(logicx_output)
+    assert "Inst 1" not in names
+    assert "Audio 1" not in names
     assert "Bass" in names
     assert "Drumloop" in names
     placements = _placement_tracks(logicx_output)

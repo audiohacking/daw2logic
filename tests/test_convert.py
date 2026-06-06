@@ -92,3 +92,9 @@ def test_convert_refuses_overwrite(bitwig_simple_dawproject, logicx_output):
     convert_file(bitwig_simple_dawproject, logicx_output)
     with pytest.raises(FileExistsError):
         convert_file(bitwig_simple_dawproject, logicx_output)
+
+
+def test_convert_force_overwrite(bitwig_simple_dawproject, logicx_output):
+    convert_file(bitwig_simple_dawproject, logicx_output)
+    report = convert_file(bitwig_simple_dawproject, logicx_output, force=True)
+    assert report.audio_regions >= 1

@@ -61,11 +61,66 @@ def _counting_ordinals(project: Project) -> dict[str, tuple[int | None, int | No
 
 
 def logic_inst_ordinal(export_index: int) -> int:
-    return MIXED_TEMPLATE_INSTRUMENTS + export_index
+    """1-based instrument ordinal; mixed-base template Inst 1 is export index 1."""
+    return export_index
 
 
 def logic_aud_ordinal(export_index: int) -> int:
-    return MIXED_TEMPLATE_AUDIO + export_index
+    """1-based audio ordinal; mixed-base template Audio 1 is export index 1."""
+    return export_index
+
+
+def synth_instrument_count(exported: int) -> int:
+    """Extra instrument tracks to synthesize beyond the mixed-base template slot."""
+    return max(0, exported - MIXED_TEMPLATE_INSTRUMENTS)
+
+
+def synth_audio_count(exported: int) -> int:
+    """Extra audio tracks to synthesize beyond the mixed-base template slot."""
+    return max(0, exported - MIXED_TEMPLATE_AUDIO)
+
+
+def _set_channel_name(pd: ProjectData, channel: int, name: str) -> None:
+    from logicx.projectdata import IVNE_IDX, _set_ivne_name
+
+    iv = next(r for r in pd.records if r.tag == b"ivnE" and _u32(r.raw, IVNE_IDX) == channel)
+    iv.raw = _set_ivne_name(iv.raw, name)
+
+
+def apply_template_track_names(
+    logicx_dir, *, inst_tracks: list[Track], aud_tracks: list[Track]
+) -> None:
+    """Name the pre-seeded template Inst 1 / Audio 1 rows from the first exported tracks."""
+    from pathlib import Path
+
+    if not inst_tracks and not aud_tracks:
+        return
+    pd_path = Path(logicx_dir) / "Alternatives" / "000" / "ProjectData"
+    pd = ProjectData.parse(pd_path.read_bytes())
+    inst_map = instrument_channels(pd)
+    aud_map = audio_channels(pd)
+    if inst_tracks and 1 in inst_map:
+        _set_channel_name(pd, inst_map[1], inst_tracks[0].name)
+    if aud_tracks and 1 in aud_map:
+        _set_channel_name(pd, aud_map[1], aud_tracks[0].name)
+    pd_path.write_bytes(pd.serialize())
+
+
+def _unused_template_channels(
+    pd: ProjectData, project: Project, export_channels: list[int]
+) -> list[int]:
+    """Template slots with no exported content — demote to end of arrange list."""
+    used = set(export_channels)
+    trailing: list[int] = []
+    inst_map = instrument_channels(pd)
+    aud_map = audio_channels(pd)
+    has_inst = any(t.midi_clips for t in project.tracks)
+    has_audio = any(t.audio_clips for t in project.tracks)
+    if not has_inst and 1 in inst_map and inst_map[1] not in used:
+        trailing.append(inst_map[1])
+    if not has_audio and 1 in aud_map and aud_map[1] not in used:
+        trailing.append(aud_map[1])
+    return trailing
 
 
 def exported_tracks(project: Project) -> list[Track]:
@@ -90,19 +145,6 @@ def export_channel_order(pd: ProjectData, project: Project) -> list[int]:
             raise ValueError(f"no Logic channel for exported track '{track.name}'")
         channels.append(ch)
     return channels
-
-
-def _template_prefix_channels(pd: ProjectData) -> list[int]:
-    """Mixed-template placeholder tracks that precede synthesized content."""
-    prefix: list[int] = []
-    for _, ch in _arrange_row_channels(pd):
-        if ch in prefix:
-            continue
-        if len(prefix) < MIXED_TEMPLATE_INSTRUMENTS + MIXED_TEMPLATE_AUDIO:
-            prefix.append(ch)
-        if len(prefix) >= MIXED_TEMPLATE_INSTRUMENTS + MIXED_TEMPLATE_AUDIO:
-            break
-    return prefix
 
 
 def _arrange_row_channels(pd: ProjectData) -> list[tuple[int, int]]:
@@ -202,8 +244,7 @@ def apply_track_order(logicx_dir, project: Project, report) -> None:
     pd = ProjectData.parse(pd_path.read_bytes())
 
     export_channels = export_channel_order(pd, project)
-    prefix = _template_prefix_channels(pd)
-    desired = prefix + export_channels
+    desired = export_channels + _unused_template_channels(pd, project, export_channels)
 
     rows = _arrange_row_channels(pd)
     current = [ch for _, ch in rows]

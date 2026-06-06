@@ -2,7 +2,7 @@
 
 Convert [DAWproject](https://github.com/bitwig/dawproject) (`.dawproject`) files to Logic Pro (`.logicx`) projects.
 
-The converter is a portable Python CLI (Linux and macOS, no Xcode required for the core tool). It uses [LogicProFormatWriter](https://github.com/geoffmyers/LogicProFormatWriter) to synthesize Logic `ProjectData` and writes sidecars for data that is not yet native in the binary format.
+The converter is a portable Python CLI (Linux and macOS). It uses [LogicProFormatWriter](https://github.com/geoffmyers/LogicProFormatWriter) to synthesize Logic `ProjectData` and writes sidecars for data that is not yet safe or complete in the binary format.
 
 ## Requirements
 
@@ -34,10 +34,11 @@ pytest
 
 ```bash
 daw2logic song.dawproject -o song.logicx
-daw2logic song.dawproject -o song.logicx --report report.json
+daw2logic song.dawproject -o song.logicx --force   # replace existing bundle
+daw2logic song.dawproject -o song.logicx --report report.json  # optional JSON report
 ```
 
-The CLI prints a summary (tracks, regions, tempo) and lists warnings on stderr. Use `--report` for a JSON file with warnings, skipped items, and stats.
+On success the CLI is quiet. Conversion notes (warnings, skipped items, stats) are written to `song.txt` beside the output bundle. Errors go to stderr. Use `--report` for structured JSON instead of or in addition to the text notes.
 
 ## Dependencies (git submodules)
 
@@ -56,24 +57,27 @@ The CLI prints a summary (tracks, regions, tempo) and lists warnings on stderr. 
 | Markers | Yes | |
 | MIDI notes + clip names | Yes | Instrument tracks |
 | Audio regions | Yes | Warp-aware slice + linear resample |
-| Track / region names | Yes | |
+| Track / region names | Yes | Reuses mixed-base template Inst 1 / Audio 1 slots |
+| Track order | Yes | Interleaved DAWproject order preserved in arrange window |
 | AU plugin presets | Sidecar | Copied to `Media/daw2logic Import/plugins/` |
 | Mixer volume / pan / mute | Native | Logic-validated on `bitwig_simple` / `bitwig_mixer` (±0.1 dB). `@0x79` gate + `@0x98` float |
+| EQ (DAWproject Equalizer) | Sidecar | Bands → Logic Channel EQ JSON in `Media/daw2logic Import/eq/` |
+| Track / clip colors | Sidecar | Parsed to manifest; native ProjectData graft disabled (corrupts Logic) |
 | Automation | Sidecar | Per-track JSON under `Media/daw2logic Import/automation/` |
 | VST / CLAP plugins | Skipped | No Logic slot |
 | Clip fades | Warning only | Not in LogicProFormatWriter yet |
-| Track colors, scenes | Skipped / warning | |
 
-After conversion, open the `.logicx` bundle in Logic Pro to verify playback. AU presets in the sidecar must be loaded manually onto channel strips until native plugin embedding is implemented.
+After conversion, open the `.logicx` bundle in Logic Pro to verify playback. AU presets, EQ, and colors in sidecars must be applied manually until native embedding is fully validated.
 
 ## Sidecar layout
 
 ```
 song.logicx/
   Media/daw2logic Import/
-    manifest.json       # per-track plugins, mixer, automation references
+    manifest.json       # per-track plugins, mixer, automation, color references
     README.txt
     plugins/            # copied .aupreset files
+    eq/                 # Channel EQ band data as JSON
     automation/         # automation curves as JSON
 ```
 
@@ -120,9 +124,9 @@ See [`scripts/re/README.md`](scripts/re/README.md) and [`daw2logic/mixer_logic.p
   → parser / flatten → IR
   → logicx synthesize_av_region_bundle → .logicx
   → transport_logic (tempo / meter / markers)
-  → track_order (template ordinals + interleaved arrange reorder)
+  → track_order (reuse template Inst 1 / Audio 1; interleaved arrange reorder)
   → mixer_logic (OCuA patching when offsets known)
-  → plugins.export_sidecars (AU / mixer / automation JSON)
+  → plugins.export_sidecars (AU / EQ / automation / color manifest JSON)
 ```
 
 ## License

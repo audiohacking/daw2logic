@@ -79,7 +79,7 @@ def test_encode_ocua_volume_bass_and_drum():
 def test_convert_patches_drumloop_volume(bitwig_simple_dawproject, logicx_output):
     report = convert_file(bitwig_simple_dawproject, logicx_output)
     pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
-    ch = audio_channels(pd)[2]  # synthesized Drumloop (ordinal 2)
+    ch = audio_channels(pd)[1]  # Drumloop on template Audio 1
     oc = _ocua_for_channel(pd, ch)
     raw = oc.raw
     assert raw[OCUA_VOL_GATE_OFF] == 0x25
@@ -91,7 +91,7 @@ def test_convert_patches_drumloop_volume(bitwig_simple_dawproject, logicx_output
 def test_convert_patches_bass_volume(bitwig_simple_dawproject, logicx_output):
     report = convert_file(bitwig_simple_dawproject, logicx_output)
     pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
-    ch = instrument_channels(pd)[2]  # synthesized Bass (ordinal 2)
+    ch = instrument_channels(pd)[1]  # Bass on template Inst 1
     oc = _ocua_for_channel(pd, ch)
     raw = oc.raw
     assert raw[OCUA_VOL_GATE_OFF] == 0x49
@@ -128,7 +128,7 @@ def test_ivne_volume_encoding_from_logic_capture():
 def test_convert_patches_kart_display_volume(bitwig_simple_dawproject, logicx_output):
     convert_file(bitwig_simple_dawproject, logicx_output)
     pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
-    drum_ch = audio_channels(pd)[2]
+    drum_ch = audio_channels(pd)[1]
     drum_kart = next(
         r for r in pd.records
         if r.tag == b"karT" and len(r.raw) == 93
@@ -144,7 +144,7 @@ def test_convert_patches_kart_display_volume(bitwig_simple_dawproject, logicx_ou
 def test_convert_patches_ivne_display_volume(bitwig_simple_dawproject, logicx_output):
     convert_file(bitwig_simple_dawproject, logicx_output)
     pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
-    drum_ch = audio_channels(pd)[2]
+    drum_ch = audio_channels(pd)[1]
     drum_iv = next(
         r for r in pd.records
         if r.tag == b"ivnE" and int.from_bytes(r.raw[8:12], "little") == drum_ch
@@ -169,8 +169,8 @@ def test_bitwig_mixer_exports_pan_mute_sidecar(bitwig_mixer_dawproject, logicx_o
     assert "Bass" in report.mixer_patched_tracks
     assert "Drumloop" in report.mixer_patched_tracks
     pd = ProjectData.parse((logicx_output / "Alternatives" / "000" / "ProjectData").read_bytes())
-    drum_raw = _ocua_for_channel(pd, audio_channels(pd)[2]).raw
-    bass_raw = _ocua_for_channel(pd, instrument_channels(pd)[2]).raw
+    drum_raw = _ocua_for_channel(pd, audio_channels(pd)[1]).raw
+    bass_raw = _ocua_for_channel(pd, instrument_channels(pd)[1]).raw
     assert drum_raw[OCUA_PAN_OFF] == normalized_to_logic_pan_byte(0.75)
     assert bass_raw[OCUA_PAN_OFF] == normalized_to_logic_pan_byte(0.25)
     assert bass_raw[OCUA_MUTE_OFF] == OCUA_MUTE_ON

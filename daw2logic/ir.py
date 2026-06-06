@@ -28,6 +28,7 @@ class MidiClip:
     notes: tuple[Note, ...]
     name: str | None = None
     play_start: float = 0.0
+    color: str | None = None
     fade_in: float | None = None
     fade_out: float | None = None
     fade_time_unit: str | None = None
@@ -42,6 +43,7 @@ class AudioClip:
     sample_rate: int | None = None
     channels: int | None = None
     play_start: float = 0.0
+    color: str | None = None
     fade_in: float | None = None
     fade_out: float | None = None
     fade_time_unit: str | None = None
@@ -49,6 +51,27 @@ class AudioClip:
     warp_time_unit: str = "beats"
     content_time_unit: str = "seconds"
     algorithm: str | None = None
+
+
+@dataclass(frozen=True)
+class EqBand:
+    band_type: str
+    frequency_hz: float | None = None
+    frequency_semitones: float | None = None
+    gain_db: float | None = None
+    q: float | None = None
+    enabled: bool | None = None
+    order: int | None = None
+
+
+@dataclass(frozen=True)
+class EqualizerInfo:
+    name: str | None
+    device_id: str | None
+    enabled: bool = True
+    bands: tuple[EqBand, ...] = ()
+    input_gain_db: float | None = None
+    output_gain_db: float | None = None
 
 
 @dataclass(frozen=True)
@@ -75,6 +98,7 @@ class Track:
     mute: bool | None = None
     solo: bool | None = None
     plugins: tuple[PluginInfo, ...] = ()
+    equalizers: tuple[EqualizerInfo, ...] = ()
     automation: tuple[dict, ...] = ()
     midi_clips: tuple[MidiClip, ...] = ()
     audio_clips: tuple[AudioClip, ...] = ()

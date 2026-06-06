@@ -76,6 +76,7 @@ def _collect_notes(clips_el: ET.Element, offset: float) -> list[MidiClip]:
                         notes=notes,
                         name=clip.get("name"),
                         play_start=_float_attr(clip, "playStart"),
+                        color=clip.get("color"),
                         fade_in=_optional_float(clip, "fadeInTime"),
                         fade_out=_optional_float(clip, "fadeOutTime"),
                         fade_time_unit=clip.get("fadeTimeUnit"),
@@ -87,21 +88,49 @@ def _collect_notes(clips_el: ET.Element, offset: float) -> list[MidiClip]:
     return out
 
 
-def _collect_audio(clips_el: ET.Element, offset: float) -> list[AudioClip]:
+def _warp_timeline_span(warps: tuple[WarpPoint, ...]) -> float:
+    if not warps:
+        return 0.0
+    return max(w.time for w in warps)
+
+
+def _is_full_span_reference(duration: float, warps: tuple[WarpPoint, ...], tol: float = 0.02) -> bool:
+    span = _warp_timeline_span(warps)
+    if span <= 0:
+        return False
+    return abs(duration - span) / span <= tol
+
+
+def _collect_audio(
+    clips_el: ET.Element,
+    offset: float,
+    parent: ET.Element | None = None,
+    inherited_color: str | None = None,
+) -> list[AudioClip]:
     out: list[AudioClip] = []
     for clip in clips_el.findall("Clip"):
         start = offset + _float_attr(clip, "time")
+        clip_color = clip.get("color") or inherited_color
         parsed = _parse_warps(clip)
-        if parsed is not None:
+        nested = clip.find("Clips")
+        if parsed is not None and nested is None:
+            duration = parsed.duration or _float_attr(clip, "duration")
+            play_start = parsed.play_start
+            if parent is not None and parsed.warps and _is_full_span_reference(duration, parsed.warps):
+                parent_duration = _float_attr(parent, "duration")
+                if parent_duration > 0:
+                    duration = parent_duration
+                    play_start = _float_attr(parent, "playStart")
             out.append(
                 AudioClip(
                     start=start,
-                    duration=parsed.duration or _float_attr(clip, "duration"),
+                    duration=duration,
                     path=parsed.path,
                     name=parsed.name or clip.get("name"),
                     sample_rate=parsed.sample_rate,
                     channels=parsed.channels,
-                    play_start=parsed.play_start,
+                    play_start=play_start,
+                    color=clip_color,
                     fade_in=parsed.fade_in,
                     fade_out=parsed.fade_out,
                     fade_time_unit=parsed.fade_time_unit,
@@ -111,10 +140,8 @@ def _collect_audio(clips_el: ET.Element, offset: float) -> list[AudioClip]:
                     algorithm=parsed.algorithm,
                 )
             )
-        nested = clip.find("Clips")
         if nested is not None:
-            for inner in _collect_audio(nested, start):
-                out.append(inner)
+            out.extend(_collect_audio(nested, start, parent=clip, inherited_color=clip_color))
     return out
 
 
