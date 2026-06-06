@@ -74,6 +74,31 @@ A WebAssembly build runs in the browser — drop a `.dawproject` file, get a `.l
 
 After conversion, open the `.logicx` bundle in Logic Pro to verify playback. AU presets, EQ, and colors in sidecars must be applied manually until native embedding is fully validated.
 
+## Standalone binary (releases)
+
+Pre-built executables for **Linux x86_64** and **macOS arm64** are attached to each [GitHub release](https://github.com/audiohacking/daw2logic/releases). No Python install required.
+
+**Linux**
+
+```bash
+curl -fsSL -o daw2logic \
+  https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-linux-x86_64
+chmod +x daw2logic
+./daw2logic song.dawproject -o song.logicx
+```
+
+**macOS (Apple Silicon)**
+
+```bash
+curl -fsSL -o daw2logic \
+  https://github.com/audiohacking/daw2logic/releases/latest/download/daw2logic-macos-arm64
+chmod +x daw2logic
+xattr -dr com.apple.quarantine daw2logic 2>/dev/null || true
+./daw2logic song.dawproject -o song.logicx
+```
+
+Build locally: `bash scripts/build_cli.sh` (requires Python 3.11+ and PyInstaller; output under `dist/`).
+
 ## Sidecar layout
 
 ```
@@ -102,7 +127,7 @@ Native AU embedding research: [`docs/AU_EMBEDDING.md`](docs/AU_EMBEDDING.md)
 
 Build fixtures: `python tests/fixtures/build_bitwig_simple.py`
 
-CI runs `pytest` on Ubuntu and macOS (Python 3.11 and 3.12) with submodules checked out recursively.
+CI runs `pytest` on Ubuntu and macOS (Python 3.11 and 3.12). Publishing a GitHub release builds standalone Linux/macOS binaries and attaches them to the release (**release** workflow). WASM builds use ccache and a zlib object cache to speed up repeat runs.
 
 ### macOS: validate bundled AU presets
 

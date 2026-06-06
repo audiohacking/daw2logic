@@ -13,7 +13,11 @@ build/
 .venv/
 venv/
 .venv-wasm/
+.venv-release/
 tmp/
+build/pyinstaller/
+dist/
+*.spec
 web/wasm/*.wasm
 web/wasm/logicx/
 nuitka-crash-report.xml

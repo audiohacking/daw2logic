@@ -1,0 +1,46 @@
+name: release
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: ${{ matrix.asset_name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            asset_name: daw2logic-linux-x86_64
+          - os: macos-latest
+            asset_name: daw2logic-macos-arm64
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: ./.github/actions/setup-ccache
+        with:
+          key: release-${{ matrix.asset_name }}
+
+      - name: Build demo fixture
+        run: python tests/fixtures/build_bitwig_simple.py
+
+      - name: Build standalone CLI
+        run: bash scripts/build_cli.sh
+        env:
+          ASSET: ${{ matrix.asset_name }}
+
+      - name: Upload release asset
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.asset_name }}

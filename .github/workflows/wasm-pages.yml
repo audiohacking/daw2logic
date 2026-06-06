@@ -29,7 +29,19 @@ jobs:
       - name: Install system deps
         run: |
           sudo apt-get update
-          sudo apt-get install -y gcc libatomic1 patchelf
+          sudo apt-get install -y gcc libatomic1 patchelf ccache
+
+      - uses: ./.github/actions/setup-ccache
+        with:
+          key: wasm-pages
+
+      - name: Cache WASI zlib objects
+        uses: actions/cache@v4
+        with:
+          path: tmp/wasi-zlib
+          key: wasi-zlib-${{ runner.os }}-${{ hashFiles('scripts/build_wasi_zlib.sh', 'scripts/patch_nuitka_wasi.py') }}
+          restore-keys: |
+            wasi-zlib-${{ runner.os }}-
 
       - name: Install Wasmer CLI
         run: |

@@ -1,0 +1,23 @@
+name: Setup ccache
+description: Install ccache and prepend compiler launchers to PATH
+inputs:
+  key:
+    description: Cache key suffix (workflow/job name)
+    required: true
+  max-size:
+    description: Maximum ccache size
+    required: false
+    default: "500M"
+runs:
+  using: composite
+  steps:
+    - name: Add ccache to PATH
+      shell: bash
+      run: echo "PATH=/usr/lib/ccache:/usr/local/opt/ccache/libexec:$PATH" >> "$GITHUB_ENV"
+
+    - name: Configure ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ inputs.key }}-${{ runner.os }}
+        max-size: ${{ inputs.max-size }}
+        save: ${{ github.event_name != 'pull_request' }}

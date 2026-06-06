@@ -72,15 +72,23 @@ WASI_CFLAGS=(
   -w
 )
 
+clang_invoke() {
+  if command -v ccache >/dev/null 2>&1; then
+    ccache "$CLANG" "$@"
+  else
+    "$CLANG" "$@"
+  fi
+}
+
 echo "==> Compiling libz for wasm32-wasi"
 for src in adler32 compress deflate infback inffast inflate inftrees trees zutil; do
-  "$CLANG" -c -o "$OUT/libz_${src}.o" "$OUT/zlib-src/${src}.c" \
+  clang_invoke -c -o "$OUT/libz_${src}.o" "$OUT/zlib-src/${src}.c" \
     "${WASI_CFLAGS[@]}" -I"$OUT/zlib-src"
 done
 # crc32 is already compiled via Nuitka's inline_copy/zlib/crc32.c — skip libz crc32.o.
 
 echo "==> Compiling zlibmodule.c for wasm32-wasi"
-"$CLANG" -c -o "$OUT/zlibmodule.o" "$OUT/zlibmodule.c" \
+clang_invoke -c -o "$OUT/zlibmodule.o" "$OUT/zlibmodule.c" \
   "${WASI_CFLAGS[@]}" \
   -I"$NUITKA/build/inline_copy/zlib" \
   -I"$NUITKA/wasi-python/include/python3.11" \
