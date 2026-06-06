@@ -38,7 +38,7 @@ See [`docs/AU_EMBEDDING.md`](../docs/AU_EMBEDDING.md).
 
 Logic stores **Channel EQ** as a **GAMETSPP PST** inside **UCuA** records on the plugin slot
 (`channel - 0x400000`, e.g. Drumloop `0x640000` → slot `0x240000`). Requires the **2128-byte
-`nCuA`** container (present on Drumloop in `bitwig_simple`; same on GREASE1 `2 Drums`).
+`nCuA`** container (present on Drumloop in `bitwig_simple`).
 
 **RE capture (2026-06):** `eq_baseline.logicx` = `bitwig_simple` after adding Channel EQ on
 Drumloop (+6 dB on ~100 Hz band). Diff vs fresh convert adds:

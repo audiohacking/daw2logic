@@ -33,7 +33,7 @@ def _dist2(a: tuple[int, int, int], b: tuple[int, int, int]) -> float:
     return sum((x - y) ** 2 for x, y in zip(a, b))
 
 
-# Logic color-picker indices (approx RGB) + GREASE1 / capture anchors.
+# Logic color-picker indices (approx RGB) + RE capture anchors.
 LOGIC_PICKER_COLORS: tuple[tuple[int, tuple[int, int, int]], ...] = (
     (1, (180, 40, 45)),
     (2, (255, 55, 50)),
@@ -66,7 +66,7 @@ LOGIC_PICKER_COLORS: tuple[tuple[int, tuple[int, int, int]], ...] = (
     (37, (217, 46, 36)),
     (39, (217, 157, 16)),
     (41, (255, 87, 6)),
-    (47, (0, 157, 71)),      # ~#009d47 GREASE1 drum clip green
+    (47, (0, 157, 71)),      # ~#009d47 green (RE capture)
 )
 
 

@@ -2,12 +2,9 @@
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from daw2logic.eq import equalizer_to_logic_channel_eq, parse_equalizer, semitones_to_hz
-from daw2logic.parser import cleanup, load
 import xml.etree.ElementTree as ET
 
 
@@ -36,18 +33,3 @@ def test_parse_equalizer_band():
     assert logic["target_plugin"] == "Logic Channel EQ"
     assert logic["bands"][0]["logic_type"] == "parametric"
     assert logic["bands"][0]["frequency_hz"] == pytest.approx(75.26, rel=0.01)
-
-
-def test_grease1_parses_equalizers():
-    grease = Path("tmp/GREASE1.dawproject")
-    if not grease.is_file():
-        pytest.skip("local GREASE1 fixture not present")
-    project = load(grease)
-    try:
-        drums = next(t for t in project.tracks if t.name == "2 Drums")
-        assert len(drums.equalizers) == 1
-        assert len(drums.equalizers[0].bands) == 5
-        vocals = next(t for t in project.tracks if t.name == "0 Lead Vocals")
-        assert vocals.equalizers[0].bands[0].band_type == "highPass"
-    finally:
-        cleanup(project)

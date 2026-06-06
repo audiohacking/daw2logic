@@ -4,14 +4,12 @@ from __future__ import annotations
 
 import struct
 import wave
-from pathlib import Path
 
 import pytest
 
 from daw2logic.audio import content_range_seconds, prepare_audio_clip
 from daw2logic.flatten import clips_from_lanes
 from daw2logic.ir import AudioClip, Transport, WarpPoint
-from daw2logic.parser import load, cleanup
 import xml.etree.ElementTree as ET
 
 
@@ -106,17 +104,3 @@ def test_prepare_audio_clip_slices_seconds_not_whole_file(tmp_path):
     with wave.open(str(out), "rb") as wf:
         assert wf.getnframes() == pytest.approx(rate, rel=0.02)
     assert not any("8922275" in w for w in warnings)
-
-
-def test_grease1_bass_clip_content_window(tmp_path):
-    grease = Path("tmp/GREASE1.dawproject")
-    if not grease.is_file():
-        pytest.skip("local GREASE1 fixture not present")
-    project = load(grease)
-    try:
-        bass = next(t for t in project.tracks if t.name == "3 Bass")
-        clip = bass.audio_clips[0]
-        c0, c1 = content_range_seconds(clip)
-        assert c1 - c0 == pytest.approx(0.5, abs=0.05)
-    finally:
-        cleanup(project)

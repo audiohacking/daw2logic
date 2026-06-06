@@ -35,7 +35,6 @@ cat <<EOF
      "$baseline" "$after" --tag gRuA
 
 DAWproject colors (for mapping): track/clip \`color="#rrggbb"\` in project.xml.
-GREASE1 example: Drums track #5761c6, clip #009d47.
 
 Reply with diff output or "done" after capture.
 
