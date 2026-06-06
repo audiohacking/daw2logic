@@ -38,4 +38,7 @@ daw2logic song.dawproject -o song.logicx --report warnings.json
 
 ## Status
 
-MVP: tempo, MIDI notes, audio regions (flat placement). Plugins, warping, automation, and non-4/4 meter maps are not imported yet.
+Imports tempo maps, meter maps, markers, MIDI notes (with clip names), and audio
+regions (with warp-aware slice/resample, clip names, and region length). Reports
+unsupported features (plugins, mixer automation, fades, scenes, track colors) in
+`--report` warnings/skipped lists.

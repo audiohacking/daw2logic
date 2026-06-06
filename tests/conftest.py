@@ -10,20 +10,25 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
-DAWPROJECT_FIXTURE = FIXTURES / "bitwig_simple.dawproject"
 BUILD_SCRIPT = FIXTURES / "build_bitwig_simple.py"
 
 
 @pytest.fixture(scope="session")
 def bitwig_simple_dawproject() -> Path:
-    if not DAWPROJECT_FIXTURE.is_file():
-        subprocess.run(
-            [sys.executable, str(BUILD_SCRIPT)],
-            check=True,
-            cwd=ROOT,
-        )
-    assert DAWPROJECT_FIXTURE.is_file(), "failed to build bitwig_simple.dawproject"
-    return DAWPROJECT_FIXTURE
+    path = FIXTURES / "bitwig_simple.dawproject"
+    if not path.is_file():
+        subprocess.run([sys.executable, str(BUILD_SCRIPT)], check=True, cwd=ROOT)
+    assert path.is_file()
+    return path
+
+
+@pytest.fixture(scope="session")
+def bitwig_extended_dawproject() -> Path:
+    path = FIXTURES / "bitwig_extended.dawproject"
+    if not path.is_file():
+        subprocess.run([sys.executable, str(BUILD_SCRIPT)], check=True, cwd=ROOT)
+    assert path.is_file()
+    return path
 
 
 @pytest.fixture

@@ -9,5 +9,6 @@ build/
 *.logicx/
 *.dawproject
 !tests/fixtures/*.dawproject
+.DS_Store
 .venv/
 venv/

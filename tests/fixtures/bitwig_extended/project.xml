@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Project version="1.0">
+  <Application name="Bitwig Studio" version="5.0"/>
+  <Transport>
+    <Tempo max="666.000000" min="20.000000" unit="bpm" value="120.000000" id="id0" name="Tempo"/>
+    <TimeSignature denominator="4" numerator="4" id="id1"/>
+  </Transport>
+  <Structure>
+    <Track contentType="notes" loaded="true" id="id2" name="Keys" color="#a2eabf">
+      <Channel audioChannels="2" destination="id15" role="regular" solo="false" id="id3">
+        <Mute value="false" id="id6" name="Mute"/>
+        <Volume max="2.000000" min="0.000000" unit="linear" value="0.800000" id="id4" name="Volume"/>
+      </Channel>
+    </Track>
+  </Structure>
+  <Arrangement id="id19">
+    <TempoAutomation target="id0" timeUnit="beats">
+      <RealPoint time="0.0" value="120.0"/>
+      <RealPoint time="4.0" value="140.0"/>
+    </TempoAutomation>
+    <Markers timeUnit="beats">
+      <Marker time="0.0" name="Intro"/>
+      <Marker time="4.0" name="Verse"/>
+    </Markers>
+    <Lanes timeUnit="beats" id="id20">
+      <Lanes track="id2" id="id21">
+        <Clips id="id22">
+          <Clip time="0.0" duration="8.0" playStart="0.0" name="Main">
+            <Notes id="id23">
+              <Note time="0.000000" duration="0.500000" channel="0" key="60" vel="0.800000" rel="0.800000"/>
+              <Note time="2.000000" duration="0.500000" channel="0" key="64" vel="0.800000" rel="0.800000"/>
+            </Notes>
+          </Clip>
+        </Clips>
+      </Lanes>
+    </Lanes>
+  </Arrangement>
+  <Scenes/>
+</Project>

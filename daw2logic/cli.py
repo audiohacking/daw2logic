@@ -50,11 +50,14 @@ def main(argv: list[str] | None = None) -> int:
     if args.report:
         payload = {
             "warnings": report.warnings,
+            "skipped": report.skipped,
             "instrument_tracks": report.instrument_tracks,
             "audio_tracks": report.audio_tracks,
             "midi_regions": report.midi_regions,
             "audio_regions": report.audio_regions,
+            "markers": report.markers,
             "tempo": report.tempo,
+            "title": report.title,
         }
         args.report.write_text(json.dumps(payload, indent=2) + "\n")
 
