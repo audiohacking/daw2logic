@@ -1,0 +1,6 @@
+[submodule "third_party/LogicProFormatWriter"]
+	path = third_party/LogicProFormatWriter
+	url = https://github.com/jonkubis/LogicProFormatWriter.git
+[submodule "third_party/dawproject"]
+	path = third_party/dawproject
+	url = https://github.com/bitwig/dawproject.git

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "daw2logic"
+version = "0.1.0"
+description = "Convert DAWproject files to Logic Pro .logicx projects"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+daw2logic = "daw2logic.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["daw2logic*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["third_party/LogicProFormatWriter"]
