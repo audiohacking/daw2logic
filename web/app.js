@@ -139,46 +139,60 @@ function unpackResult(bytes) {
   return { notes, logicxZip };
 }
 
+async function readBinaryStream(stream) {
+  if (!stream) return new Uint8Array();
+  const chunks = [];
+  const reader = stream.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) chunks.push(value);
+  }
+  return concatUint8(chunks);
+}
+
+async function readTextStream(stream) {
+  if (!stream) return "";
+  const decoder = new TextDecoder();
+  let text = "";
+  const reader = stream.getReader();
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    if (value) text += decoder.decode(value, { stream: true });
+  }
+  text += decoder.decode();
+  return text;
+}
+
 async function convertBytes(inputBytes, sourceName) {
   const wasmBytes = await ensureRuntime();
   setStatus("Converting…");
 
-  const [pkg, seeds] = await Promise.all([
-    Wasmer.fromFile(wasmBytes),
-    loadSeedMount(),
-  ]);
+  // Keep Wasmer calls serial — concurrent SDK entry can nest LocalPool executors.
+  const seeds = await loadSeedMount();
+  const pkg = await Wasmer.fromFile(wasmBytes);
   if (!pkg.entrypoint) {
     throw new Error("compiled module has no WASI entrypoint");
   }
 
-  const stdoutChunks = [];
-  const stderrChunks = [];
   const instance = await pkg.entrypoint.run({
     stdin: inputBytes,
     mount: { "/seeds": seeds },
   });
-  await instance.stdout?.pipeTo(
-    new WritableStream({
-      write(chunk) {
-        stdoutChunks.push(chunk);
-      },
-    })
-  );
-  await instance.stderr?.pipeTo(
-    new WritableStream({
-      write(chunk) {
-        stderrChunks.push(new TextDecoder().decode(chunk));
-      },
-    })
-  );
 
+  // Start consuming streams, but do NOT await them before wait().
+  // Awaiting pipeTo/read first deadlocks the WASIX executor (LocalPool EnterError).
+  const stdoutPromise = readBinaryStream(instance.stdout);
+  const stderrPromise = readTextStream(instance.stderr);
   const outcome = await instance.wait();
+  const [stdout, stderrText] = await Promise.all([stdoutPromise, stderrPromise]);
+
   if (!outcome.ok) {
-    const errText = stderrChunks.join("").trim();
+    const errText = (stderrText || "").trim();
     throw new Error(errText || `converter exited with code ${outcome.code}`);
   }
 
-  const stdout = concatUint8(stdoutChunks);
   if (stdout.byteLength === 0) {
     throw new Error("converter produced empty output");
   }
