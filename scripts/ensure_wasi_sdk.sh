@@ -1,13 +1,18 @@
 #!/usr/bin/env bash
 # Ensure Nuitka's wasi-sdk/21/sdk-$OS tree exists (with retries).
-# Avoids bare requests.get() 504s from nuitka.utils.wasi_sdk.download_sdk().
+# Archives are cached under tmp/wasi-sdk/ so CI never poisons .venv-wasm/.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 VENV="${VENV:-$ROOT/.venv-wasm}"
 WASI_SDK_VERSION="${WASI_SDK_VERSION:-21}"
 WASI_SDK_RELEASE="${WASI_SDK_RELEASE:-21.0}"
+CACHE_DIR="${WASI_SDK_CACHE:-$ROOT/tmp/wasi-sdk}"
 
+if [[ ! -f "$VENV/bin/activate" ]]; then
+  echo "venv missing or incomplete: $VENV (run build_wasm.sh first)" >&2
+  exit 1
+fi
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
 
@@ -28,20 +33,20 @@ esac
 SDK_DIR="$SDK_ROOT/sdk-$OS_NAME"
 CLANG="$SDK_DIR/bin/clang"
 if [[ -x "$CLANG" ]]; then
-  echo "==> Using existing wasi-sdk at $SDK_DIR"
+  echo "==> Using existing wasi-sdk at $SDK_DIR" >&2
   echo "$SDK_DIR"
   exit 0
 fi
 
-mkdir -p "$SDK_ROOT"
-ARCHIVE_PATH="$SDK_ROOT/$ARCHIVE"
+mkdir -p "$CACHE_DIR" "$SDK_ROOT"
+ARCHIVE_PATH="$CACHE_DIR/$ARCHIVE"
 URL="https://github.com/WebAssembly/wasi-sdk/releases/download/wasi-sdk-${WASI_SDK_VERSION}/$ARCHIVE"
 
 fetch_with_retries() {
   local url=$1 dest=$2
   local attempt
   for attempt in 1 2 3 4 5; do
-    echo "==> Downloading wasi-sdk (attempt $attempt/5): $url"
+    echo "==> Downloading wasi-sdk (attempt $attempt/5): $url" >&2
     if curl -fL --retry 5 --retry-all-errors --retry-delay 3 \
       --connect-timeout 30 --max-time 600 \
       -o "$dest.partial" "$url"; then
@@ -59,7 +64,7 @@ if [[ ! -f "$ARCHIVE_PATH" ]]; then
   fetch_with_retries "$URL" "$ARCHIVE_PATH"
 fi
 
-echo "==> Extracting $ARCHIVE"
+echo "==> Extracting $ARCHIVE into Nuitka wasi-sdk tree" >&2
 rm -rf "$SDK_DIR" "$SDK_ROOT/_extract"
 mkdir -p "$SDK_ROOT/_extract"
 tar -xzf "$ARCHIVE_PATH" -C "$SDK_ROOT/_extract"
@@ -76,5 +81,5 @@ if [[ ! -x "$CLANG" ]]; then
   exit 1
 fi
 
-echo "==> wasi-sdk ready at $SDK_DIR"
+echo "==> wasi-sdk ready at $SDK_DIR" >&2
 echo "$SDK_DIR"

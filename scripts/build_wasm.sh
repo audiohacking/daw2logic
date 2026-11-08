@@ -13,8 +13,11 @@ fi
 
 echo "==> Using Python: $($PY --version)"
 
-if [[ ! -d "$VENV" ]]; then
+# CI may restore a partial .venv-wasm from cache (e.g. only wasi-sdk files)
+# without bin/activate — treat that as missing and recreate.
+if [[ ! -f "$VENV/bin/activate" ]]; then
   echo "==> Creating venv at $VENV"
+  rm -rf "$VENV"
   "$PY" -m venv "$VENV"
 fi
 # shellcheck disable=SC1091
