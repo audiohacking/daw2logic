@@ -121,6 +121,7 @@ python -m http.server 8080 --directory web   # preview WASM UI
 | `wasi clang not found at ... sdk-Darwin` | Linux CI using Darwin SDK path (fixed: dynamic `sdk-{platform}`) |
 | `dlopen` / empty zlib on WASI | Missing `build_wasi_zlib.sh` + Nuitka patch |
 | `Fetched in submodule path 'tests/CPython38'` | pip git-install of Nuitka fork pulls broken submodules — `build_wasm.sh` clones with `--recurse-submodules=no` |
+| `HTTPError: 504` downloading wasi-sdk | Use `scripts/ensure_wasi_sdk.sh` (curl retries) + CI cache; set `WASI_SDK_DIR` so Nuitka skips its no-retry downloader |
 | Submodule push denied | Use patch file, don't bump LogicProFormatWriter pointer for WASI-only fixes |
 
 ## Conventions for agents

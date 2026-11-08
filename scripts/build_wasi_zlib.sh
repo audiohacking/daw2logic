@@ -12,28 +12,7 @@ ZLIB_VERSION="${ZLIB_VERSION:-1.3.1}"
 source "$VENV/bin/activate"
 
 NUITKA="$(python -c 'import nuitka, pathlib; print(pathlib.Path(nuitka.__file__).parent)')"
-WASI_SDK="$(python - <<'PY'
-import contextlib
-import os
-import platform
-import sys
-
-import nuitka
-
-sdk = os.path.join(
-    os.path.dirname(nuitka.__file__),
-    f"wasi-sdk/21/sdk-{platform.system()}",
-)
-clang = os.path.join(sdk, "bin/clang")
-if not os.path.isfile(clang):
-    from nuitka.utils.wasi_sdk import download_sdk
-
-    with contextlib.redirect_stdout(sys.stderr):
-        download_sdk()
-
-print(sdk)
-PY
-)"
+WASI_SDK="$(bash "$ROOT/scripts/ensure_wasi_sdk.sh" | tail -1)"
 CLANG="$WASI_SDK/bin/clang"
 SYSROOT="$WASI_SDK/share/wasi-sysroot"
 
@@ -47,7 +26,8 @@ mkdir -p "$OUT" "$OUT/clinic" "$OUT/zlib-src"
 fetch() {
   local url=$1 dest=$2
   if [[ ! -f "$dest" ]]; then
-    curl -fsSL "$url" -o "$dest"
+    curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+      --connect-timeout 30 --max-time 120 -o "$dest" "$url"
   fi
 }
 
@@ -57,7 +37,10 @@ fetch "https://raw.githubusercontent.com/python/cpython/${CPYTHON_TAG}/Modules/c
   "$OUT/clinic/zlibmodule.c.h"
 
 if [[ ! -f "$OUT/zlib-src/zutil.c" ]]; then
-  curl -fsSL "https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz" | tar xz -C "$OUT/zlib-src" --strip-components=1
+  curl -fL --retry 5 --retry-all-errors --retry-delay 2 \
+    --connect-timeout 30 --max-time 120 \
+    "https://zlib.net/fossils/zlib-${ZLIB_VERSION}.tar.gz" \
+    | tar xz -C "$OUT/zlib-src" --strip-components=1
 fi
 
 WASI_CFLAGS=(

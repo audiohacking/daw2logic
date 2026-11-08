@@ -76,9 +76,16 @@ export LDFLAGS="${LDFLAGS:-${LIBATOMIC:+-L$LIBATOMIC}}"
 mkdir -p "$(dirname "$OUT")"
 
 apply_nuitka_wasi_patch
+
+echo "==> Ensuring wasi-sdk is present (retries on GitHub 5xx)"
+bash "$ROOT/scripts/ensure_wasi_sdk.sh" >/dev/null
+
 build_wasi_zlib_objects
 
 echo "==> Compiling wasm/main.py -> $OUT"
+# WASI_SDK_DIR short-circuits Nuitka's own download_sdk() (no retries / 504-prone).
+export WASI_SDK_DIR
+WASI_SDK_DIR="$(bash "$ROOT/scripts/ensure_wasi_sdk.sh" | tail -1)"
 py2wasm "$ROOT/wasm/main.py" -o "$OUT"
 
 echo "==> Built $(du -h "$OUT" | awk '{print $1}') wasm module"

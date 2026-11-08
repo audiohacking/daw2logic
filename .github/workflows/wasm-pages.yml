@@ -35,13 +35,16 @@ jobs:
         with:
           key: wasm-pages
 
-      - name: Cache WASI zlib objects
+      - name: Cache WASI zlib objects + wasi-sdk tarball
         uses: actions/cache@v4
         with:
-          path: tmp/wasi-zlib
-          key: wasi-zlib-${{ runner.os }}-${{ hashFiles('scripts/build_wasi_zlib.sh', 'scripts/patch_nuitka_wasi.py') }}
+          path: |
+            tmp/wasi-zlib
+            tmp/nuitka-wasi
+            .venv-wasm/lib/python3.11/site-packages/nuitka/wasi-sdk
+          key: wasi-build-${{ runner.os }}-${{ hashFiles('scripts/build_wasi_zlib.sh', 'scripts/ensure_wasi_sdk.sh', 'scripts/build_wasm.sh') }}
           restore-keys: |
-            wasi-zlib-${{ runner.os }}-
+            wasi-build-${{ runner.os }}-
 
       - name: Install Wasmer CLI
         run: |
