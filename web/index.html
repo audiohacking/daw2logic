@@ -6,6 +6,24 @@
   <title>daw2logic — browser converter</title>
   <link rel="icon" href="logo.png" type="image/png">
   <link rel="stylesheet" href="styles.css">
+  <script>
+    // Wasmer needs cross-origin isolation (SharedArrayBuffer). GitHub Pages cannot
+    // set COOP/COEP headers, so coi-serviceworker.js patches them via a SW.
+    // Retry registration/reload until the page is actually controlled + isolated
+    // (the default script gives up after one reload even if the SW is not yet controlling).
+    window.coi = {
+      shouldRegister: () => {
+        if (window.crossOriginIsolated) return false;
+        const reloads = Number(sessionStorage.getItem("daw2logic_coi_reloads") || "0");
+        return reloads < 3;
+      },
+      doReload: () => {
+        const reloads = Number(sessionStorage.getItem("daw2logic_coi_reloads") || "0") + 1;
+        sessionStorage.setItem("daw2logic_coi_reloads", String(reloads));
+        window.location.reload();
+      },
+    };
+  </script>
   <script src="coi-serviceworker.js"></script>
 </head>
 <body>

@@ -69,11 +69,8 @@ jobs:
           print("wasm smoke test OK")
           PY
 
-      - name: Fetch COOP/COEP service worker
-        run: |
-          curl -fsSL \
-            https://raw.githubusercontent.com/gzuidhof/coi-serviceworker/master/coi-serviceworker.min.js \
-            -o web/coi-serviceworker.js
+      - name: Verify COOP/COEP service worker is vendored
+        run: test -f web/coi-serviceworker.js
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

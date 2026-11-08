@@ -69,9 +69,46 @@ async function loadSeedMount() {
   return seeds;
 }
 
+async function waitForCrossOriginIsolation(timeoutMs = 8000) {
+  if (window.crossOriginIsolated) {
+    sessionStorage.removeItem("daw2logic_coi_reloads");
+    return;
+  }
+
+  // Service worker may be active but not yet controlling this document.
+  if ("serviceWorker" in navigator) {
+    const regs = await navigator.serviceWorker.getRegistrations();
+    if (regs.length && !navigator.serviceWorker.controller) {
+      const reloads = Number(sessionStorage.getItem("daw2logic_coi_reloads") || "0");
+      if (reloads < 3) {
+        sessionStorage.setItem("daw2logic_coi_reloads", String(reloads + 1));
+        setStatus("Enabling cross-origin isolation (required for WASM)…");
+        window.location.reload();
+        await new Promise(() => {});
+      }
+    }
+  }
+
+  const deadline = Date.now() + timeoutMs;
+  while (!window.crossOriginIsolated && Date.now() < deadline) {
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+
+  if (!window.crossOriginIsolated) {
+    throw new Error(
+      "This page is not cross-origin isolated, so Wasmer cannot run. " +
+        "Hard-refresh once (or clear site data for this origin) and try again. " +
+        "Local preview: bash scripts/serve_web.sh"
+    );
+  }
+  sessionStorage.removeItem("daw2logic_coi_reloads");
+}
+
 async function ensureRuntime() {
   if (!runtimeReady) {
     runtimeReady = (async () => {
+      setStatus("Preparing secure WASM environment…");
+      await waitForCrossOriginIsolation();
       setStatus("Loading WebAssembly runtime…");
       await init({ module: SDK_WASM_URL });
       const response = await fetch(WASM_URL);

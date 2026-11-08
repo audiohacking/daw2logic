@@ -102,14 +102,13 @@ python -m http.server 8080 --directory web   # preview WASM UI
 - `web/wasm/*.wasm`, `web/wasm/logicx/` (build outputs)
 - `.venv-wasm/`, `.venv-release/`, `tmp/`, `dist/`, `build/pyinstaller/`, `*.spec`
 - `nuitka-crash-report.xml`
-- `tests/fixtures/DAWTEST.dawproject` (local user fixture; keep untracked unless explicitly requested)
 - Dirty submodule state from applied WASI patches
 
 ## Web UI
 
 - `web/index.html`, `web/app.js`, `web/styles.css`
 - Logo: `web/logo.png` (also favicon); README may use GitHub CDN URL for the same image
-- COOP/COEP: `web/coi-serviceworker.js` (fetched in CI)
+- COOP/COEP: vendored `web/coi-serviceworker.js`; `index.html` retries SW reload until `crossOriginIsolated` (Wasmer needs SharedArrayBuffer)
 
 ## Common failure modes (seen in production)
 

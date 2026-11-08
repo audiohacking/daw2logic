@@ -66,7 +66,7 @@ Enable Pages in repo settings: **Source → GitHub Actions**.
 | Logic seeds at runtime | WASM cannot use Nuitka package-data paths; `build_wasm.sh` copies seeds to `web/wasm/logicx/data/` and smoke/CI mount them at `/seeds` |
 | Python version | WASM build requires **3.11** (not 3.12+) |
 | Binary size | Full converter + libpython WASM is large (expect tens of MB) |
-| Browser headers | Needs COOP/COEP for Wasmer SDK; handled via service worker on Pages |
+| Browser headers | Needs COOP/COEP for Wasmer SDK; `web/coi-serviceworker.js` + `window.coi` retry until `crossOriginIsolated` |
 | Browser seeds | `app.js` fetches `web/wasm/logicx/data/*` and mounts them at `/seeds` for the WASI module |
 | Folder drop | UI currently accepts `.dawproject` files only; folder → zip client-side is TODO |
 | AU sidecars | Same as CLI — presets export to sidecar paths inside the bundle zip |
