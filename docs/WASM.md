@@ -61,7 +61,7 @@ Enable Pages in repo settings: **Source → GitHub Actions**.
 
 | Topic | Status |
 |-------|--------|
-| py2wasm on PyPI | Standard PyPI `py2wasm` is upstream Nuitka **without** WASI — use the [lum1n0us fork](https://github.com/lum1n0us/Nuitka/tree/dev/wasi_sync_upstream) via `scripts/build_wasm.sh` |
+| py2wasm on PyPI | Standard PyPI `py2wasm` is upstream Nuitka **without** WASI — `build_wasm.sh` clones the [lum1n0us fork](https://github.com/lum1n0us/Nuitka/tree/dev/wasi_sync_upstream) **without git submodules** (broken `tests/CPython38` ref) |
 | WASI C extensions | Nuitka standalone tries `dlopen` for stdlib C modules; `scripts/patch_nuitka_wasi.py` + `scripts/build_wasi_zlib.sh` link `PyInit_zlib` for zipfile |
 | Logic seeds at runtime | WASM cannot use Nuitka package-data paths; `build_wasm.sh` copies seeds to `web/wasm/logicx/data/` and smoke/CI mount them at `/seeds` |
 | Python version | WASM build requires **3.11** (not 3.12+) |

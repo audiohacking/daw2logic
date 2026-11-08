@@ -22,7 +22,21 @@ source "$VENV/bin/activate"
 
 echo "==> Installing py2wasm fork + project deps"
 pip install -q --upgrade pip
-pip install -q "py2wasm @ git+https://github.com/lum1n0us/Nuitka@dev/wasi_sync_upstream"
+
+# Clone without submodules: the fork's tests/CPython38 submodule points at a
+# deleted commit, and pip's git backend always runs `submodule update --recursive`.
+NUITKA_SRC="${NUITKA_SRC:-$ROOT/tmp/nuitka-wasi}"
+NUITKA_REF="${NUITKA_REF:-dev/wasi_sync_upstream}"
+NUITKA_REPO="${NUITKA_REPO:-https://github.com/lum1n0us/Nuitka.git}"
+if [[ ! -d "$NUITKA_SRC/.git" ]]; then
+  echo "==> Cloning py2wasm Nuitka fork ($NUITKA_REF) without submodules"
+  rm -rf "$NUITKA_SRC"
+  git clone --depth 1 --branch "$NUITKA_REF" --recurse-submodules=no \
+    "$NUITKA_REPO" "$NUITKA_SRC"
+else
+  echo "==> Reusing existing Nuitka checkout at $NUITKA_SRC"
+fi
+pip install -q "$NUITKA_SRC"
 pip install -q -e "$ROOT/third_party/LogicProFormatWriter"
 pip install -q -e "$ROOT"
 

@@ -120,6 +120,7 @@ python -m http.server 8080 --directory web   # preview WASM UI
 | `[Errno 54] Not a directory: ./logicx/data/...` | Seeds not mounted at `/seeds` (CLI or browser) |
 | `wasi clang not found at ... sdk-Darwin` | Linux CI using Darwin SDK path (fixed: dynamic `sdk-{platform}`) |
 | `dlopen` / empty zlib on WASI | Missing `build_wasi_zlib.sh` + Nuitka patch |
+| `Fetched in submodule path 'tests/CPython38'` | pip git-install of Nuitka fork pulls broken submodules — `build_wasm.sh` clones with `--recurse-submodules=no` |
 | Submodule push denied | Use patch file, don't bump LogicProFormatWriter pointer for WASI-only fixes |
 
 ## Conventions for agents
@@ -138,7 +139,7 @@ daw2logic/audio.py         pass-through vs stretch audio
 daw2logic/wasm_api.py      in-memory convert + zip + wire format
 daw2logic/parser.py        .dawproject load
 wasm/main.py               WASI entry + nuitka-project lines
-scripts/build_wasm.sh      full WASM pipeline
+scripts/build_wasm.sh      full WASM pipeline (Nuitka clone → tmp/nuitka-wasi, no submodules)
 scripts/build_cli.sh       PyInstaller release binary
 web/app.js                 browser Wasmer runner + seed mount
 .github/workflows/         CI / Pages / release

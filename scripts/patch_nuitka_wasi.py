@@ -60,8 +60,7 @@ def main() -> int:
     if any(m in text for m in LEGACY_MARKERS):
         print(
             "legacy WASI patch detected; reinstall py2wasm fork first:\n"
-            "  pip install --force-reinstall --no-deps "
-            "'py2wasm @ git+https://github.com/lum1n0us/Nuitka@dev/wasi_sync_upstream'",
+            "  rm -rf tmp/nuitka-wasi .venv-wasm && bash scripts/build_wasm.sh",
             file=sys.stderr,
         )
         return 1
