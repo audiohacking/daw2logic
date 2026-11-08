@@ -109,7 +109,7 @@ python -m http.server 8080 --directory web   # preview WASM UI
 - `web/index.html`, `web/app.js`, `web/styles.css`
 - Logo: `web/logo.png` (also favicon); README may use GitHub CDN URL for the same image
 - COOP/COEP: vendored `web/coi-serviceworker.js`; `index.html` retries SW reload until `crossOriginIsolated` (Wasmer needs SharedArrayBuffer)
-- Wasmer I/O: never `await` stdout/stderr drains before `instance.wait()` — that nests the LocalPool executor (`EnterError`). Start reads, then `await wait()`, then collect stream results.
+- Wasmer I/O: use **only** `const output = await instance.wait()` and read `output.stdoutBytes`. Never touch `instance.stdout`/`stderr` streams — concurrent stream reads nest LocalPool (`EnterError` panic).
 
 ## Common failure modes (seen in production)
 

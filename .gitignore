@@ -20,4 +20,5 @@ dist/
 *.spec
 web/wasm/*.wasm
 web/wasm/logicx/
+web/_test.dawproject
 nuitka-crash-report.xml

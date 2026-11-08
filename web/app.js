@@ -21,17 +21,10 @@ const downloadLogicx = document.getElementById("download-logicx");
 const downloadNotes = document.getElementById("download-notes");
 
 let runtimeReady;
-
-function concatUint8(chunks) {
-  const total = chunks.reduce((sum, part) => sum + part.byteLength, 0);
-  const out = new Uint8Array(total);
-  let offset = 0;
-  for (const part of chunks) {
-    out.set(part, offset);
-    offset += part.byteLength;
-  }
-  return out;
-}
+/** @type {Uint8Array | null} */
+let wasmBytesCache = null;
+/** @type {Promise<Record<string, Uint8Array>> | null} */
+let seedsReady = null;
 
 function setStatus(message, kind = "") {
   statusEl.classList.remove("hidden", "error", "ok");
@@ -75,7 +68,6 @@ async function waitForCrossOriginIsolation(timeoutMs = 8000) {
     return;
   }
 
-  // Service worker may be active but not yet controlling this document.
   if ("serviceWorker" in navigator) {
     const regs = await navigator.serviceWorker.getRegistrations();
     if (regs.length && !navigator.serviceWorker.controller) {
@@ -117,7 +109,10 @@ async function ensureRuntime() {
           `WASM module not found (${response.status}). Build with scripts/build_wasm.sh or wait for the GitHub Pages workflow.`
         );
       }
-      return new Uint8Array(await response.arrayBuffer());
+      wasmBytesCache = new Uint8Array(await response.arrayBuffer());
+      seedsReady = loadSeedMount();
+      await seedsReady;
+      return wasmBytesCache;
     })();
   }
   return runtimeReady;
@@ -139,38 +134,18 @@ function unpackResult(bytes) {
   return { notes, logicxZip };
 }
 
-async function readBinaryStream(stream) {
-  if (!stream) return new Uint8Array();
-  const chunks = [];
-  const reader = stream.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) chunks.push(value);
-  }
-  return concatUint8(chunks);
-}
-
-async function readTextStream(stream) {
-  if (!stream) return "";
-  const decoder = new TextDecoder();
-  let text = "";
-  const reader = stream.getReader();
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    if (value) text += decoder.decode(value, { stream: true });
-  }
-  text += decoder.decode();
-  return text;
-}
-
 async function convertBytes(inputBytes, sourceName) {
-  const wasmBytes = await ensureRuntime();
+  await ensureRuntime();
   setStatus("Converting…");
 
-  // Keep Wasmer calls serial — concurrent SDK entry can nest LocalPool executors.
-  const seeds = await loadSeedMount();
+  const wasmBytes = wasmBytesCache;
+  const seeds = await seedsReady;
+  if (!wasmBytes || !seeds) {
+    throw new Error("WASM runtime not initialized");
+  }
+
+  // Official Wasmer pattern: run → wait() only. Do NOT touch instance.stdout /
+  // stderr streams — concurrent stream reads nest LocalPool and panic.
   const pkg = await Wasmer.fromFile(wasmBytes);
   if (!pkg.entrypoint) {
     throw new Error("compiled module has no WASI entrypoint");
@@ -180,20 +155,15 @@ async function convertBytes(inputBytes, sourceName) {
     stdin: inputBytes,
     mount: { "/seeds": seeds },
   });
+  const output = await instance.wait();
 
-  // Start consuming streams, but do NOT await them before wait().
-  // Awaiting pipeTo/read first deadlocks the WASIX executor (LocalPool EnterError).
-  const stdoutPromise = readBinaryStream(instance.stdout);
-  const stderrPromise = readTextStream(instance.stderr);
-  const outcome = await instance.wait();
-  const [stdout, stderrText] = await Promise.all([stdoutPromise, stderrPromise]);
-
-  if (!outcome.ok) {
-    const errText = (stderrText || "").trim();
-    throw new Error(errText || `converter exited with code ${outcome.code}`);
+  if (!output.ok) {
+    const errText = String(output.stderr || "").trim();
+    throw new Error(errText || `converter exited with code ${output.code}`);
   }
 
-  if (stdout.byteLength === 0) {
+  const stdout = output.stdoutBytes;
+  if (!(stdout instanceof Uint8Array) || stdout.byteLength === 0) {
     throw new Error("converter produced empty output");
   }
 
@@ -246,3 +216,16 @@ dropzone.addEventListener("drop", (event) => {
 ensureRuntime()
   .then(() => setStatus("Ready — drop a .dawproject file to convert."))
   .catch((err) => setStatus(err.message || String(err), "error"));
+
+// Localhost-only hook for automated smoke tests.
+if (location.hostname === "127.0.0.1" || location.hostname === "localhost") {
+  window.__daw2logicSmoke = async (url = "/_test.dawproject") => {
+    const bytes = new Uint8Array(await (await fetch(url)).arrayBuffer());
+    await convertBytes(bytes, "smoke.dawproject");
+    return {
+      status: statusEl.textContent,
+      notes: notesEl.textContent.slice(0, 200),
+      hasDownload: Boolean(downloadLogicx.href && downloadLogicx.href.startsWith("blob:")),
+    };
+  };
+}
